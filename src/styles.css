@@ -760,7 +760,6 @@ h2 {
   inset: 0;
   border-radius: 8px;
   background: var(--grad);
-  z-index: -1;
 }
 
 .check {
@@ -1033,7 +1032,6 @@ textarea.input {
   inset: 0;
   border-radius: 8px;
   background: var(--grad);
-  z-index: -1;
 }
 
 /* Строка про сервер ядра: ссылка длинная, её нельзя ужимать в одну колонку */

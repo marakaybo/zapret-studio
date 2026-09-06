@@ -57,6 +57,38 @@ fn net_error(what: &str, e: &reqwest::Error) -> String {
     format!("{what}: {e}")
 }
 
+/// GitHub отвечает 403 и на «нельзя», и на «слишком часто», а без токена
+/// разрешено всего 60 запросов в час на один адрес — и адрес этот общий, если
+/// сидишь за NAT провайдера. Голое «GitHub ответил 403 Forbidden» в такой
+/// ситуации не говорит ни что случилось, ни что делать.
+fn http_error(what: &str, status: u16, headers: &reqwest::header::HeaderMap) -> String {
+    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
+    let exhausted = header("x-ratelimit-remaining") == Some("0");
+
+    if (status == 403 || status == 429) && exhausted {
+        let when = header("x-ratelimit-reset")
+            .and_then(|v| v.parse::<i64>().ok())
+            .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0))
+            .map(|t| t.with_timezone(&chrono::Local).format("%H:%M").to_string());
+        return match when {
+            Some(t) => format!(
+                "{what}: исчерпан лимит запросов к GitHub — без входа их всего 60 в час на один адрес. Лимит вернётся в {t}, до тех пор проверки обновлений подождут"
+            ),
+            None => format!(
+                "{what}: исчерпан лимит запросов к GitHub — без входа их всего 60 в час на один адрес. Подожди примерно час"
+            ),
+        };
+    }
+    if status == 403 || status == 429 {
+        let after = header("retry-after").map(|v| format!(" Повтори через {v} с.")).unwrap_or_default();
+        return format!("{what}: GitHub отказал ({status}).{after} Обычно это временно");
+    }
+    if status == 404 {
+        return format!("{what}: GitHub отвечает «не найдено» (404) — проверь адрес репозитория");
+    }
+    format!("{what}: GitHub ответил {status}")
+}
+
 #[derive(Deserialize)]
 struct GhAsset {
     name: String,
@@ -269,7 +301,7 @@ async fn github<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> 
     let resp = resp.ok_or(last)?;
 
     if !resp.status().is_success() {
-        return Err(format!("GitHub ответил {}", resp.status()));
+        return Err(http_error("Не удалось спросить GitHub", resp.status().as_u16(), resp.headers()));
     }
     resp.json().await.map_err(|e| format!("не разобрать ответ GitHub: {e}"))
 }
@@ -410,7 +442,7 @@ async fn download_to_file(
                 break;
             }
             Ok(r) => {
-                last = format!("загрузка не удалась: GitHub ответил {}", r.status());
+                last = http_error("Не скачивается", r.status().as_u16(), r.headers());
                 break;
             }
             Err(e) => {
@@ -601,6 +633,31 @@ fn verdict(current: Option<String>, found: Result<ReleaseInfo, String>) -> Updat
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ответ 403 без объяснений — самая частая жалоба: пользователь видит
+    /// «Forbidden» и не понимает, что просто надо подождать.
+    #[test]
+    fn explains_the_rate_limit_instead_of_saying_forbidden() {
+        let make = |remaining: &str| {
+            let mut h = reqwest::header::HeaderMap::new();
+            h.insert("x-ratelimit-remaining", remaining.parse().unwrap());
+            h.insert("x-ratelimit-reset", "4102444800".parse().unwrap());
+            h
+        };
+
+        let limited = http_error("Не скачивается", 403, &make("0"));
+        assert!(limited.contains("лимит"), "{limited}");
+        assert!(limited.contains("60 в час"), "{limited}");
+        assert!(!limited.contains("403"), "код без объяснения не помогает: {limited}");
+
+        // 403 с оставшимся запасом — это уже не лимит, и врать про него нельзя
+        let denied = http_error("Не скачивается", 403, &make("17"));
+        assert!(denied.contains("403"), "{denied}");
+        assert!(!denied.contains("лимит"), "{denied}");
+
+        let missing = http_error("Не удалось спросить GitHub", 404, &make("50"));
+        assert!(missing.contains("репозитор"), "{missing}");
+    }
 
     /// Суммы публикуют в разных форматах — из всех нужно достать одно и то же.
     #[test]

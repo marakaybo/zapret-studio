@@ -2061,20 +2061,20 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
 }
 
 async fn background_check(app: &AppHandle) {
-    let (current, auto_install) = {
+    let (current, installed, auto_install) = {
         let state = app.state::<AppState>();
         let cfg = state.config();
-        (cfg.installed_version.clone(), cfg.auto_install_updates)
+        (
+            cfg.installed_version.clone(),
+            cfg.zapret_dir.as_deref().map(sysutil::looks_like_zapret).unwrap_or(false),
+            cfg.auto_install_updates,
+        )
     };
+    if !installed {
+        return;
+    }
 
     let result = updater::check(current).await;
-
-    {
-        let state = app.state::<AppState>();
-        let mut cfg = state.config();
-        cfg.last_update_check = Some(sysutil::now_iso());
-        let _ = state.set_config(cfg);
-    }
     let _ = app.emit("update-check", result.clone());
 
     if !result.has_update {
@@ -2389,6 +2389,14 @@ fn spawn_update_watcher(app: AppHandle) {
                 cfg.auto_check_updates && check_due(&cfg)
             };
             if due {
+                // Отметку ставим до похода в сеть: если GitHub откажет, круг
+                // не должен повторяться каждые 15 минут и добивать лимит
+                {
+                    let state = app.state::<AppState>();
+                    let mut cfg = state.config();
+                    cfg.last_update_check = Some(sysutil::now_iso());
+                    let _ = state.set_config(cfg);
+                }
                 background_check(&app).await;
                 background_check_byedpi(&app).await;
                 background_check_goodbye(&app).await;

@@ -191,46 +191,12 @@ function Shell() {
     started.current = true;
 
     (async () => {
-      const s = await api.snapshot();
-      setSnap(s);
+      setSnap(await api.snapshot());
       setLogs(await api.logs());
-      if (s.config.autoCheckUpdates && s.dirOk) {
-        try {
-          setUpdate(await api.checkUpdate());
-        } catch {
-          /* тихо: интернета может не быть */
-        }
-      }
-      if (s.config.autoCheckUpdates && s.byedpi.installed) {
-        try {
-          setByeUpdate(await api.checkByedpiUpdate());
-        } catch {
-          /* тихо: интернета может не быть */
-        }
-      }
-      if (s.config.autoCheckUpdates && s.goodbye.installed) {
-        try {
-          setGdpiUpdate(await api.checkGoodbyeUpdate());
-        } catch {
-          /* тихо: интернета может не быть */
-        }
-      }
-      if (s.config.autoCheckUpdates) {
-        try {
-          setAppUpdate(await api.checkAppUpdate());
-        } catch {
-          /* тихо: интернета может не быть */
-        }
-      }
-      for (const id of CORES) {
-        if (!s.config.autoCheckUpdates || !s[id].installed) continue;
-        try {
-          const u = await api.checkCoreUpdate(id);
-          setCoreUpdate((prev) => ({ ...prev, [id]: u }));
-        } catch {
-          /* тихо: интернета может не быть */
-        }
-      }
+      // Про обновления не спрашиваем: этим занят фоновый сторож в бэкенде.
+      // Он ходит на GitHub не чаще, чем сказано в настройках, и присылает
+      // результат событиями ниже. Раньше окно спрашивало про все шесть
+      // программ на каждый запуск — и упиралось в лимит GitHub
     })();
 
     if (!isTauri) {
