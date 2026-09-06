@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
-import { Alert, Check, Cross, Crown, Gauge, Plus, Trash } from "../icons";
+import { Alert, Check, Cog, Cross, Crown, Gauge, Plus, Trash } from "../icons";
 import { Counter, Spinner, Switch } from "../components/ui";
-import type { Snapshot, StrategyResult, TestStage } from "../types";
+import { isCore } from "../engines";
+import type { PresetEngine, Snapshot, StrategyResult, TestStage } from "../types";
 
 /** Свои сайты: список того, что проверять вдобавок к встроенным целям. */
 function OwnTargets({
@@ -31,7 +32,7 @@ function OwnTargets({
   };
 
   return (
-    <div className="card" style={{ marginBottom: 14 }}>
+    <div>
       <div className="row" style={{ marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>Свои сайты</div>
@@ -146,8 +147,8 @@ function ResultCard({
             </span>
             {!r.started && <span className="pill" style={{ color: "var(--bad)" }}>не запустилась</span>}
           </div>
-          <div style={{ marginTop: 7, display: "flex", gap: 10, alignItems: "center" }}>
-            <div className="score-bar" style={{ width: 150 }}>
+          <div className="result-meta">
+            <div className="score-bar">
               <motion.div
                 className="score-fill"
                 initial={{ width: 0 }}
@@ -156,10 +157,10 @@ function ResultCard({
                 style={{ background: scoreColor(r.score) }}
               />
             </div>
-            <span className="num" style={{ fontSize: 12, color: scoreColor(r.score), fontWeight: 600 }}>
+            <span className="num score-num" style={{ color: scoreColor(r.score) }}>
               <Counter value={r.score} decimals={0} suffix="%" />
             </span>
-            <span style={{ fontSize: 12, color: "var(--dim)" }}>
+            <span className="result-nums">
               {r.avgMs != null ? `${r.avgMs} мс` : "—"}
               {r.speedKbs != null ? ` · ${(r.speedKbs / 1024).toFixed(1)} МБ/с` : ""}
             </span>
@@ -234,9 +235,16 @@ export default function Tests({
   onSaveTargets: (items: string[]) => void;
 }) {
   // Все движки проверяются одинаково, различаются только источник списка
-  // и то, что уходит на бэкенд: имя батника или id пресета.
-  const presets =
-    snap.engine === "byedpi" ? snap.byedpi : snap.engine === "goodbyedpi" ? snap.goodbye : null;
+  // и то, что уходит на бэкенд: имя батника или id пресета. Ядра сюда
+  // забыли добавить, когда они появились, — и экран показывал стратегии
+  // zapret, хотя выбран был Xray: проверка уходила в пустоту.
+  const presets: PresetEngine | null = isCore(snap.engine)
+    ? snap[snap.engine]
+    : snap.engine === "byedpi"
+      ? snap.byedpi
+      : snap.engine === "goodbyedpi"
+        ? snap.goodbye
+        : null;
   const items = presets
     ? presets.presets.map((p) => ({ key: p.id, id: p.id, label: p.name }))
     : snap.strategies.map((s) => ({ key: s.file, id: s.name, label: s.label }));
@@ -245,6 +253,10 @@ export default function Tests({
   const titleOf = (r: StrategyResult) => (presets ? r.label : r.strategy);
   const [picked, setPicked] = useState<string[]>([]);
   const [baseline, setBaseline] = useState(true);
+  // Настройка проверки свёрнута: человек приходит сюда нажать «запустить»,
+  // а не выбирать, что проверять. Раньше выбор занимал весь первый экран,
+  // и результаты — то, ради чего всё затевалось, — начинались за прокруткой
+  const [tuning, setTuning] = useState(false);
 
   const selection = picked.length ? picked : all;
   const estimate = Math.round(((selection.length + (baseline ? 1 : 0)) * 9.5) / 60);
@@ -264,108 +276,121 @@ export default function Tests({
       <div className="head">
         <h1>{presets ? "Проверка пресетов" : "Проверка стратегий"}</h1>
         <p className="sub">
-          {snap.engine === "byedpi"
-            ? "Поднимаю пресеты по очереди и хожу к Discord, YouTube и Google через сам прокси — то есть меряю ровно то, что получит браузер. Системный прокси при этом не трогаю."
-            : "Включаю их по очереди и стучусь к Discord, YouTube и Google по-настоящему. Прошло рукопожатие TLS — значит, DPI обойдён."}{" "}
-          Результат честный ровно на момент проверки: провайдер меняет фильтрацию, так что при
-          проблемах прогоняй заново.
+          {presets && snap.engine !== "goodbyedpi"
+            ? "Поднимаю по очереди и хожу к Discord, YouTube и Google через сам прокси — меряю ровно то, что получит браузер."
+            : "Включаю по очереди и стучусь к Discord, YouTube и Google по-настоящему. Прошло рукопожатие TLS — значит, DPI обойдён."}{" "}
+          Результат честен на момент проверки: провайдер меняет фильтрацию, так что при проблемах
+          прогоняй заново.
         </p>
       </div>
 
       {snap.warp.connected && (
         <motion.div
-          className="card"
+          className="notice warn"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{
-            marginBottom: 14,
-            borderColor: "rgba(255,193,85,0.4)",
-            background: "linear-gradient(90deg, rgba(255,193,85,0.12), rgba(255,193,85,0.02))",
-          }}
+          style={{ marginBottom: 11 }}
         >
-          <div className="row">
-            <span style={{ color: "var(--warn)", display: "flex", fontSize: 17 }}>
-              <Alert />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>Подключён Cloudflare WARP</div>
-              <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
-                Весь трафик идёт через туннель, включая проверки — результат покажет качество WARP,
-                а не обхода. Отключи его в настройках, если хочешь честный замер.
-              </div>
+          <span className="n-icon">
+            <Alert />
+          </span>
+          <div className="n-body">
+            <div className="n-title">Подключён Cloudflare WARP</div>
+            <div className="n-text">
+              Проверки тоже идут через туннель — результат покажет качество WARP, а не обхода
             </div>
           </div>
         </motion.div>
       )}
 
-      <OwnTargets snap={snap} busy={busy} onSave={onSaveTargets} />
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="row" style={{ marginBottom: 12 }}>
-          <div style={{ flex: 1 }}>
+      <div className="card" style={{ marginBottom: 11, padding: 12 }}>
+        <div className="row">
+          <span className="rank" style={{ flex: "none" }}>
+            <Gauge />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>
               {picked.length
                 ? `Выбрано ${picked.length} из ${all.length}`
-                : `${presets ? "Все пресеты" : "Все стратегии"} (${all.length})`}
+                : `${presets ? "Все пресеты" : "Все стратегии"} — ${all.length}`}
             </div>
-            <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
-              Примерно {estimate < 1 ? "меньше минуты" : `${estimate} мин`} · во время проверки интернет
-              будет подмигивать, это нормально
+            <div className="sub">
+              Примерно {estimate < 1 ? "меньше минуты" : `${estimate} мин`}
+              {baseline ? " · со сравнением «без обхода»" : ""} · интернет будет подмигивать, это
+              нормально
             </div>
           </div>
+          <button
+            className={`btn sm ${tuning ? "" : "ghost"}`}
+            onClick={() => setTuning((v) => !v)}
+            disabled={running}
+          >
+            <Cog /> Что проверять
+          </button>
           {running ? (
             <button className="btn danger" onClick={onCancel}>
               Остановить
             </button>
           ) : (
-            <button className="btn primary" onClick={() => onRun(selection, baseline)} disabled={!all.length}>
-              <Gauge /> Запустить проверку
+            <button
+              className="btn primary"
+              onClick={() => onRun(selection, baseline)}
+              disabled={!all.length}
+            >
+              <Gauge /> Запустить
             </button>
           )}
         </div>
-
-        <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-          <button className="btn sm ghost" onClick={() => setPicked([])} disabled={running}>
-            Все
-          </button>
-          <button
-            className="btn sm ghost"
-            onClick={() => setPicked(currentId ? [currentId] : [])}
-            disabled={running}
-          >
-            Только текущая
-          </button>
-          <div style={{ flex: 1 }} />
-          <div className="row" style={{ gap: 9 }}>
-            <span className="sub" style={{ fontSize: 12 }}>Сравнить с «без обхода»</span>
-            <Switch on={baseline} onChange={setBaseline} disabled={running} />
-          </div>
-        </div>
-
-        <div className="tags">
-          {items.map((s) => {
-            const on = picked.includes(s.id);
-            return (
-              <motion.span
-                key={s.key}
-                className="tag"
-                whileTap={{ scale: 0.94 }}
-                onClick={() => !running && toggle(s.id)}
-                style={{
-                  cursor: running ? "default" : "pointer",
-                  fontSize: 11,
-                  padding: "4px 9px",
-                  background: on ? "rgba(124,107,255,0.18)" : undefined,
-                  borderColor: on ? "rgba(124,107,255,0.45)" : undefined,
-                  color: on ? "var(--text)" : undefined,
-                }}
-              >
-                {s.label}
-              </motion.span>
-            );
-          })}
-        </div>
       </div>
+
+      <AnimatePresence>
+        {tuning && (
+          <motion.div
+            className="card"
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <button className="btn sm ghost" onClick={() => setPicked([])} disabled={running}>
+                Все
+              </button>
+              <button
+                className="btn sm ghost"
+                onClick={() => setPicked(currentId ? [currentId] : [])}
+                disabled={running}
+              >
+                Только текущая
+              </button>
+              <div style={{ flex: 1 }} />
+              <div className="row" style={{ gap: 9 }}>
+                <span className="sub">Сравнить с «без обхода»</span>
+                <Switch on={baseline} onChange={setBaseline} disabled={running} />
+              </div>
+            </div>
+
+            <div className="tags" style={{ marginBottom: 14 }}>
+              {items.map((s) => {
+                const on = picked.includes(s.id);
+                return (
+                  <motion.span
+                    key={s.key}
+                    className={`tag ${on ? "on" : ""}`}
+                    whileTap={{ scale: 0.94 }}
+                    onClick={() => !running && toggle(s.id)}
+                    style={{ cursor: running ? "default" : "pointer" }}
+                  >
+                    {s.label}
+                  </motion.span>
+                );
+              })}
+            </div>
+
+            <OwnTargets snap={snap} busy={busy} onSave={onSaveTargets} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {stage && running && (

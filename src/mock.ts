@@ -556,6 +556,17 @@ export const mockApi = {
   },
 };
 
+/** Движок можно задать адресом: ?engine=xray. Нужно, чтобы посмотреть экраны
+ *  каждого движка, не проходя весь путь переключения руками. */
+if (typeof window !== "undefined") {
+  const wanted = new URLSearchParams(window.location.search).get("engine");
+  const known = ["zapret", "byedpi", "goodbyedpi", "xray", "singbox"];
+  if (wanted && known.includes(wanted)) {
+    state.engine = wanted as Engine;
+    state.config = { ...state.config, engine: wanted as Engine };
+  }
+}
+
 /** Демонстрационные результаты — чтобы видеть экран проверки без запуска winws. */
 export const mockResults: StrategyResult[] = [
   result("__baseline__", 33, true),
