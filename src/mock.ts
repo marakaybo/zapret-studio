@@ -2,7 +2,7 @@
  * Заглушка для разработки интерфейса в обычном браузере.
  * В собранном приложении не используется: там всегда есть Tauri-мост.
  */
-import type { AppConfig, Check, Core, CoreSettings, CoreState, Engine, GoodbyeState, Health, LogLine, Preset, Snapshot, StrategyResult, UpdateCheck, WarpProbe } from "./types";
+import type { AppConfig, Check, Core, CoreSettings, CoreState, Engine, GoodbyeState, Health, LogLine, Preset, ServerPing, Snapshot, StrategyResult, UpdateCheck, WarpProbe } from "./types";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -87,6 +87,9 @@ const coreState = (presets: Preset[], port: number, version: string): CoreState 
   systemProxyActive: false,
   server: null,
   serverError: null,
+  servers: [],
+  selectedServer: null,
+  subscription: null,
 });
 
 const label = (n: string) => {
@@ -152,7 +155,7 @@ const state: Snapshot = {
   service: { installed: false, running: false, strategy: null },
   autostart: false,
   testing: false,
-  appVersion: "1.2.1",
+  appVersion: "1.3.0",
   managedDir: "C:\\Users\\Marakabo\\AppData\\Roaming\\com.marakabo.zapret-studio\\zapret",
   ipsetMode: "loaded",
   fakes: {
@@ -440,6 +443,20 @@ export const mockApi = {
     state[engine] = { ...state[engine], port };
     return wait({ snapshot: { ...state }, messages: [`Ядро переехало на порт ${port}`] });
   },
+  loadSubscription: (engine: Core, url: string) => {
+    const servers = ["vless · de1.example.com:443 · Reality", "trojan · nl2.example.com:8443 · TLS"];
+    state[engine] = { ...state[engine], subscription: url, servers, selectedServer: 0, server: servers[0] };
+    return wait({ snapshot: { ...state }, messages: [`Серверов из подписки — ${servers.length}`] }, 700);
+  },
+  selectServer: (engine: Core, index: number) => {
+    state[engine] = { ...state[engine], selectedServer: index, server: state[engine].servers[index] };
+    return wait({ snapshot: { ...state }, messages: ["Сервер выбран"] }, 300);
+  },
+  pingServers: (engine: Core) =>
+    wait<ServerPing[]>(
+      state[engine].servers.map((_, index) => ({ index, ms: 40 + Math.round(Math.random() * 160) })),
+      900
+    ),
   setCoreServer: (engine: Core, url: string) => {
     const server = url.trim() ? `${url.split("://")[0]} · сервер из ссылки` : null;
     state[engine] = { ...state[engine], server, serverError: null };
@@ -502,10 +519,30 @@ export const mockApi = {
       },
       800
     ),
+  exportProfile: () =>
+    wait(
+      JSON.stringify(
+        {
+          version: 1,
+          engine: state.config.engine,
+          selectedStrategy: state.config.selectedStrategy,
+          gameFilter: state.config.gameFilter,
+          customTargets: state.config.customTargets,
+        },
+        null,
+        2
+      )
+    ),
+  importProfile: (text: string) => {
+    const p = JSON.parse(text);
+    state.config = { ...state.config, engine: p.engine ?? state.config.engine };
+    state.engine = state.config.engine;
+    return wait({ snapshot: { ...state }, messages: ["Профиль применён"] }, 600);
+  },
   checkAppUpdate: () =>
     wait<UpdateCheck>({
-      current: "1.2.1",
-      latest: "1.2.1",
+      current: "1.3.0",
+      latest: "1.3.0",
       hasUpdate: false,
       release: null,
       error: null,

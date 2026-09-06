@@ -10,6 +10,7 @@ import type {
   LogLine,
   NetSample,
   Health,
+  ServerPing,
   Snapshot,
   StrategyResult,
   UpdateCheck,
@@ -48,6 +49,11 @@ const real = {
   setCorePort: (engine: Core, port: number) => invoke<ActionResult>("set_core_port", { engine, port }),
   /** Пустая строка — забыть сервер */
   setCoreServer: (engine: Core, url: string) => invoke<ActionResult>("set_core_server", { engine, url }),
+  loadSubscription: (engine: Core, url: string) =>
+    invoke<ActionResult>("load_subscription", { engine, url }),
+  selectServer: (engine: Core, index: number) =>
+    invoke<ActionResult>("select_server", { engine, index }),
+  pingServers: (engine: Core) => invoke<ServerPing[]>("ping_servers", { engine }),
 
   // --- GoodbyeDPI ---
   setGoodbyeDir: (path: string) => invoke<Snapshot>("set_goodbye_dir", { path }),
@@ -62,6 +68,10 @@ const real = {
   cancelTests: () => invoke<void>("cancel_tests"),
   setCustomTargets: (items: string[]) => invoke<Snapshot>("set_custom_targets", { items }),
   healthCheck: () => invoke<Health>("health_check"),
+
+  /** Профиль настроек текстом — им делятся с друзьями */
+  exportProfile: () => invoke<string>("export_profile"),
+  importProfile: (text: string) => invoke<ActionResult>("import_profile", { text }),
 
   // --- обновление самого приложения ---
   checkAppUpdate: () => invoke<UpdateCheck>("check_app_update"),

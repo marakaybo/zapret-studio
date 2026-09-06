@@ -242,6 +242,8 @@ export default function Settings({
   appChecking,
   onCheckAppUpdate,
   onInstallAppUpdate,
+  onExportProfile,
+  onImportProfile,
 }: {
   snap: Snapshot;
   update: UpdateCheck | null;
@@ -294,6 +296,8 @@ export default function Settings({
   appChecking: boolean;
   onCheckAppUpdate: () => void;
   onInstallAppUpdate: () => void;
+  onExportProfile: () => Promise<string>;
+  onImportProfile: (text: string) => void;
 }) {
   const cfg = snap.config;
   const bye = snap.byedpi;
@@ -304,6 +308,8 @@ export default function Settings({
   const [hostsBusy, setHostsBusy] = useState(false);
   const [port, setPort] = useState(String(bye.port));
   const [repo, setRepo] = useState(snap.appRepo);
+  const [mine, setMine] = useState<string | null>(null);
+  const [theirs, setTheirs] = useState("");
   const [probe, setProbe] = useState<WarpProbe | null>(null);
   const [probing, setProbing] = useState(false);
 
@@ -404,6 +410,76 @@ export default function Settings({
               Применить
             </button>
           </Row>
+        </div>
+
+        <div className="card">
+          <h2 style={{ marginBottom: 4 }}>Профиль настроек</h2>
+          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+            Подобранную стратегию можно передать другому человеку: у одного провайдера обычно
+            работает одно и то же, а подбирать заново — полчаса. Внутри только выбор — движок,
+            пресеты, порты, свои сайты для проверки. Ссылок на серверы там нет: в них твои uuid
+            и пароли, а профиль улетает в переписку навсегда.
+          </p>
+
+          <Row
+            title="Мой профиль"
+            desc={mine ? "Скопируй и отправь — вставляется в поле ниже" : "Соберу текст, который можно переслать"}
+          >
+            <button
+              className="btn sm"
+              onClick={async () => setMine(await onExportProfile())}
+              disabled={busy}
+            >
+              <Link /> {mine ? "Обновить" : "Показать"}
+            </button>
+            {mine && (
+              <button className="btn sm ghost" onClick={() => setMine(null)}>
+                Скрыть
+              </button>
+            )}
+          </Row>
+          {mine && (
+            <textarea
+              className="input mono"
+              readOnly
+              rows={7}
+              spellCheck={false}
+              value={mine}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ marginBottom: 10, fontSize: 11.5, userSelect: "text" }}
+            />
+          )}
+
+          <div className="setting" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="txt">
+              <div className="t">Применить чужой</div>
+              <div className="d">
+                Вставь профиль, который прислали. Твои папки, версии и свои серверы останутся
+                на месте — заменится только выбор
+              </div>
+            </div>
+            <div className="server-row">
+              <textarea
+                className="input mono"
+                rows={3}
+                spellCheck={false}
+                placeholder='{"version":1,"engine":"zapret", …}'
+                value={theirs}
+                onChange={(e) => setTheirs(e.target.value)}
+                style={{ flex: 1, fontSize: 11.5 }}
+              />
+              <button
+                className="btn sm primary"
+                disabled={busy || !theirs.trim()}
+                onClick={() => {
+                  onImportProfile(theirs.trim());
+                  setTheirs("");
+                }}
+              >
+                {busy ? <Spinner /> : null} Применить
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="card">

@@ -193,7 +193,12 @@ pub fn run(root: Option<&Path>, own_proxy: Option<u16>, own: &[&str]) -> Vec<Che
         }
     });
 
-    // 4. Драйвер WinDivert живёт службой, пока им кто-то пользуется.
+    // 4. Ответы DNS и антивирус — до проверок про сам драйвер: если врёт DNS
+    // или драйвер съели, всё остальное уже неважно
+    checks.push(dns_substitution());
+    checks.push(antivirus());
+
+    // 5. Драйвер WinDivert живёт службой, пока им кто-то пользуется.
     // Это не конфликт: на нём работают и zapret, и GoodbyeDPI.
     if let Some(name) = ["WinDivert", "WinDivert1.4"]
         .into_iter()
@@ -266,6 +271,152 @@ pub fn run(root: Option<&Path>, own_proxy: Option<u16>, own: &[&str]) -> Vec<Che
     }
 
     checks
+}
+
+/// Адреса, которые у Cloudflare и Google не меняются годами. По ним видно,
+/// подменяет ли провайдер ответы DNS: настоящий ответ известен заранее.
+const DNS_ANCHORS: &[(&str, &[&str])] = &[
+    ("one.one.one.one", &["1.1.1.1", "1.0.0.1"]),
+    ("dns.google", &["8.8.8.8", "8.8.4.4"]),
+];
+
+/// Сверяет системный резолвер с тем, что заведомо верно. Провайдеры,
+/// подменяющие DNS, обычно отвечают адресом своей заглушки — и тогда обход
+/// бессилен: браузер идёт не туда ещё до всякого DPI.
+pub fn dns_substitution() -> Check {
+    use std::net::ToSocketAddrs;
+
+    let mut checked = 0;
+    let mut wrong: Vec<String> = Vec::new();
+    for (host, expected) in DNS_ANCHORS {
+        let Ok(addrs) = (*host, 443u16).to_socket_addrs() else { continue };
+        let got: Vec<String> = addrs.map(|a| a.ip().to_string()).collect();
+        if got.is_empty() {
+            continue;
+        }
+        checked += 1;
+        // Хотя бы один настоящий адрес — значит, резолвер отвечает честно
+        if !got.iter().any(|ip| expected.contains(&ip.as_str())) {
+            wrong.push(format!("{host} → {}", got.join(", ")));
+        }
+    }
+
+    if checked == 0 {
+        return Check {
+            title: "Ответы DNS".into(),
+            level: "warn".into(),
+            detail: "Имена не разрешаются вообще — проверить нечего".into(),
+            hint: Some("Похоже, DNS не работает: без него не откроется ни один сайт, независимо от обхода.".into()),
+            items: Vec::new(),
+        };
+    }
+    if wrong.is_empty() {
+        return Check {
+            title: "Ответы DNS".into(),
+            level: "ok".into(),
+            detail: format!("Проверено имён: {checked}, адреса настоящие"),
+            hint: None,
+            items: Vec::new(),
+        };
+    }
+    Check {
+        title: "Ответы DNS".into(),
+        level: "fail".into(),
+        detail: format!("Подменены: {}", wrong.join("; ")),
+        hint: Some(
+            "Провайдер отвечает на запросы DNS чужими адресами — браузер уходит не туда ещё до DPI, и обход тут не поможет. Пропиши в настройках сети DNS-сервер 1.1.1.1 или включи DNS-over-HTTPS в Windows."
+                .into(),
+        ),
+        items: Vec::new(),
+    }
+}
+
+/// Антивирусы регулярно принимают WinDivert за вредоносный драйвер и тихо
+/// удаляют его или блокируют загрузку. Выглядит это как «zapret не
+/// запускается» без всяких объяснений, и догадаться почти невозможно.
+pub fn antivirus() -> Check {
+    let out = run_hidden(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct | Select-Object -ExpandProperty displayName",
+        ],
+    );
+    let names: Vec<String> = match &out {
+        Ok(o) if o.status.success() => out_text(o)
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        _ => Vec::new(),
+    };
+    if names.is_empty() {
+        return Check {
+            title: "Антивирус".into(),
+            level: "ok".into(),
+            detail: "Сторонних антивирусов не видно".into(),
+            hint: None,
+            items: Vec::new(),
+        };
+    }
+    // Защитник Windows с WinDivert уживается, чужие — через раз
+    let third_party: Vec<&String> =
+        names.iter().filter(|n| !n.to_lowercase().contains("defender")).collect();
+    if third_party.is_empty() {
+        return Check {
+            title: "Антивирус".into(),
+            level: "ok".into(),
+            detail: names.join(", "),
+            hint: None,
+            items: Vec::new(),
+        };
+    }
+    Check {
+        title: "Антивирус".into(),
+        level: "warn".into(),
+        detail: third_party.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+        hint: Some(
+            "Сторонние антивирусы регулярно принимают драйвер WinDivert за вредоносный: удаляют файл или не дают ему загрузиться, а выглядит это как «zapret не запускается». Если обход не поднимается — добавь папку zapret в исключения."
+                .into(),
+        ),
+        items: Vec::new(),
+    }
+}
+
+/// Проверяет, есть ли у машины живой IPv6. Отдельно от `run`, потому что
+/// требует сети.
+pub async fn ipv6_leak() -> Check {
+    // Обычное TCP-соединение по литеральному адресу: без DNS и без TLS, так
+    // что ответ однозначный — есть маршрут по IPv6 или нет
+    let reachable = tokio::time::timeout(
+        std::time::Duration::from_secs(4),
+        tokio::net::TcpStream::connect("[2606:4700:4700::1111]:443"),
+    )
+    .await
+    .map(|r| r.is_ok())
+    .unwrap_or(false);
+
+    if !reachable {
+        return Check {
+            title: "IPv6".into(),
+            level: "ok".into(),
+            detail: "Не работает — весь трафик идёт по IPv4".into(),
+            hint: None,
+            items: Vec::new(),
+        };
+    }
+    Check {
+        title: "IPv6".into(),
+        level: "warn".into(),
+        detail: "Работает — часть трафика может пойти мимо обхода".into(),
+        hint: Some(
+            "Стратегии обхода настроены в основном на IPv4. Если сайт открывается по IPv6, DPI видит его как есть, и обход не срабатывает — это частая причина «обход включён, а сайт не открывается». Проверь: если без IPv6 сайт открывается, отключи его в свойствах сетевого адаптера."
+                .into(),
+        ),
+        items: Vec::new(),
+    }
 }
 
 /// Куда провайдер видит наш трафик на самом деле. Отдельно от `run`, потому

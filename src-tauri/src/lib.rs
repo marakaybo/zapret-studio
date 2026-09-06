@@ -4,6 +4,7 @@ mod diag;
 mod goodbye;
 mod link;
 mod preset;
+mod profile;
 mod proxycore;
 mod runner;
 mod selfupdate;
@@ -198,6 +199,12 @@ pub struct CoreState {
     server: Option<String>,
     /// Ссылка сохранена, но не разбирается — говорим, почему
     server_error: Option<String>,
+    /// Все известные серверы сводками, в том же порядке, что в настройках
+    servers: Vec<String>,
+    /// Какой из них выбран
+    selected_server: Option<usize>,
+    /// Откуда пришёл список
+    subscription: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -454,6 +461,13 @@ fn build_core_state(
         Ok(None) => (None, None),
         Err(e) => (None, Some(e)),
     };
+    // Наружу — только сводки: в самих ссылках лежат uuid и пароли
+    let servers: Vec<String> = cc
+        .servers
+        .iter()
+        .map(|raw| link::parse(raw).map(|l| l.summary()).unwrap_or_else(|e| format!("не разобрать: {e}")))
+        .collect();
+    let selected_server = cc.server.as_ref().and_then(|s| cc.servers.iter().position(|x| x == s));
     CoreState {
         installed,
         dir: cc.dir.as_ref().map(|d| d.display().to_string()),
@@ -472,6 +486,9 @@ fn build_core_state(
         system_proxy_active: core.is_running() && sysproxy::is_ours(proxy_now, port),
         server,
         server_error,
+        servers,
+        selected_server,
+        subscription: cc.subscription.clone(),
     }
 }
 
@@ -1389,7 +1406,17 @@ fn set_core_server(
     let parsed = if url.is_empty() { None } else { Some(link::parse(&url)?) };
 
     let mut cfg = state.config();
-    core_cfg_mut(&mut cfg, &engine).server = (!url.is_empty()).then_some(url);
+    {
+        let cc = core_cfg_mut(&mut cfg, &engine);
+        // Вставленный руками сервер попадает в общий список: иначе он
+        // потеряется, стоит выбрать другой из подписки
+        if let Some(url) = (!url.is_empty()).then_some(url.clone()) {
+            if !cc.servers.contains(&url) {
+                cc.servers.push(url);
+            }
+        }
+        cc.server = (!url.is_empty()).then_some(url);
+    }
     state.set_config(cfg)?;
 
     let mut messages = vec![match &parsed {
@@ -1409,6 +1436,135 @@ fn set_core_server(
         }
     }
     Ok(ActionResult { snapshot: build_snapshot(&state), messages })
+}
+
+/// Отклик сервера: время установки TCP-соединения до него. Это не скорость
+/// и не гарантия, что сервер работает, — но мёртвый или далёкий виден сразу.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerPing {
+    index: usize,
+    ms: Option<u64>,
+}
+
+/// Скачивает подписку и раскладывает её в список серверов.
+#[tauri::command]
+async fn load_subscription(
+    engine: String,
+    url: String,
+    state: State<'_, AppState>,
+) -> Result<ActionResult, String> {
+    let spec = core_spec(&engine)?;
+    let url = url.trim().to_string();
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err("Ссылка на подписку должна начинаться с http:// или https://".into());
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent(concat!("ZapretStudio/", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| {
+        format!("Подписка не скачалась: {e}. Если её тоже режут, включи обход и попробуй снова")
+    })?;
+    if !resp.status().is_success() {
+        return Err(format!("Панель ответила {}", resp.status()));
+    }
+    let text = resp.text().await.map_err(|e| format!("ответ не прочитан: {e}"))?;
+
+    let found = link::parse_many(&text);
+    if found.is_empty() {
+        return Err("В подписке не нашлось ни одного сервера — проверь ссылку".into());
+    }
+
+    let raw: Vec<String> = {
+        // Сохраняем строки как есть: разобранная ссылка теряет мелочи,
+        // которых мы не знаем, а конфиг собирается из исходной
+        let decoded = if text.contains("://") {
+            text.clone()
+        } else {
+            String::from_utf8_lossy(&link::b64(text.trim()).unwrap_or_default()).to_string()
+        };
+        decoded
+            .lines()
+            .map(str::trim)
+            .filter(|l| link::parse(l).is_ok())
+            .map(str::to_string)
+            .collect()
+    };
+
+    let mut cfg = state.config();
+    {
+        let cc = core_cfg_mut(&mut cfg, &engine);
+        cc.subscription = Some(url);
+        cc.servers = raw;
+        // Прежний выбор мог исчезнуть из подписки — тогда берём первый
+        if !cc.server.as_ref().is_some_and(|s| cc.servers.contains(s)) {
+            cc.server = cc.servers.first().cloned();
+        }
+    }
+    state.set_config(cfg)?;
+    Ok(ActionResult {
+        snapshot: build_snapshot(&state),
+        messages: vec![format!("{}: серверов из подписки — {}", spec.name, found.len())],
+    })
+}
+
+/// Выбирает сервер из списка. Если ядро работает на серверном пресете,
+/// перезапускаем: конфиг читается только при старте.
+#[tauri::command]
+fn select_server(
+    app: AppHandle,
+    engine: String,
+    index: usize,
+    state: State<'_, AppState>,
+) -> Result<ActionResult, String> {
+    core_spec(&engine)?;
+    let mut cfg = state.config();
+    let chosen = {
+        let cc = core_cfg_mut(&mut cfg, &engine);
+        let chosen = cc.servers.get(index).cloned().ok_or("Такого сервера в списке нет")?;
+        cc.server = Some(chosen.clone());
+        chosen
+    };
+    state.set_config(cfg)?;
+
+    let summary = link::parse(&chosen).map(|l| l.summary()).unwrap_or_default();
+    let mut messages = vec![format!("Сервер выбран: {summary}")];
+    let core = state.core(&engine).expect("ядро из списка ядер");
+    if let Some(id) = core.current().filter(|_| core.is_running()) {
+        if proxycore::needs_server(&id) {
+            match start_core(&app, &state, &engine, Some(id)) {
+                Ok(m) => messages.extend(m),
+                Err(e) => messages.push(format!("Не удалось перейти на новый сервер: {e}")),
+            }
+        }
+    }
+    Ok(ActionResult { snapshot: build_snapshot(&state), messages })
+}
+
+/// Меряет отклик до каждого сервера сразу до всех — по очереди это заняло бы
+/// минуты на подписке из двух десятков узлов.
+#[tauri::command]
+async fn ping_servers(engine: String, state: State<'_, AppState>) -> Result<Vec<ServerPing>, String> {
+    core_spec(&engine)?;
+    let servers = core_cfg(&state.config(), &engine).servers.clone();
+
+    let probes = servers.into_iter().enumerate().map(|(index, raw)| async move {
+        let Ok(l) = link::parse(&raw) else { return ServerPing { index, ms: None } };
+        let started = std::time::Instant::now();
+        let addr = format!("{}:{}", l.host, l.port);
+        let ok = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            tokio::net::TcpStream::connect(addr),
+        )
+        .await
+        .map(|r| r.is_ok())
+        .unwrap_or(false);
+        ServerPing { index, ms: ok.then(|| started.elapsed().as_millis() as u64) }
+    });
+    Ok(futures_util::future::join_all(probes).await)
 }
 
 #[tauri::command]
@@ -1754,6 +1910,29 @@ async fn install_app_update(app: AppHandle) -> Result<String, String> {
     Ok(format!("Устанавливаю версию {} — приложение сейчас закроется", release.version))
 }
 
+/// Профиль настроек текстом — его пересылают другому человеку.
+#[tauri::command]
+fn export_profile(state: State<'_, AppState>) -> Result<String, String> {
+    profile::to_text(&state.config())
+}
+
+/// Накладывает присланный профиль. Свои папки, версии и ссылки на серверы
+/// остаются на месте: в профиле их нет и быть не должно.
+#[tauri::command]
+fn import_profile(text: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let incoming = profile::parse(&text)?;
+    let mut cfg = state.config();
+    let changed = profile::apply(&incoming, &mut cfg);
+    state.set_config(cfg)?;
+
+    let mut messages = vec![match changed.len() {
+        0 => "Профиль применён — у тебя уже были те же настройки".to_string(),
+        _ => format!("Профиль применён: {}", changed.join(", ")),
+    }];
+    messages.push("Обход не перезапускала — включи его сама, когда будешь готова".into());
+    Ok(ActionResult { snapshot: build_snapshot(&state), messages })
+}
+
 #[tauri::command]
 fn cancel_tests(state: State<'_, AppState>) {
     state.cancel.store(true, Ordering::SeqCst);
@@ -1830,8 +2009,11 @@ fn clear_logs(state: State<'_, AppState>) {
 async fn diagnostics(state: State<'_, AppState>) -> Result<Vec<diag::Check>, String> {
     let (root, port, own) = (state.root(), state.own_proxy_port(), state.own_processes());
     let mut checks = diag::run(root.as_deref(), port, &own);
-    // Внешний адрес требует сети, поэтому идёт отдельным шагом
-    checks.push(diag::external_address().await);
+    // Сетевые проверки идут отдельно и параллельно: каждая ждёт ответа
+    // до нескольких секунд, а вместе укладываются в те же секунды
+    let (address, ipv6) = tokio::join!(diag::external_address(), diag::ipv6_leak());
+    checks.push(address);
+    checks.push(ipv6);
     Ok(checks)
 }
 
@@ -2469,11 +2651,14 @@ pub fn run() {
             let cfg_path = data_dir.join("config.json");
             let mut cfg = config::load(&cfg_path);
 
-            // Папка могла быть удалена между запусками
+            // Папка могла быть удалена между запусками. Отметку «первый
+            // запуск пройден» при этом не сбрасываем: она про человека, а не
+            // про папку. Иначе после обновления или переезда папки приложение
+            // встречало бы знакомить с собой заново того, кто им давно
+            // пользуется, — а это первое, что видишь вместо своей главной
             if let Some(dir) = cfg.zapret_dir.clone() {
                 if !sysutil::looks_like_zapret(&dir) {
                     cfg.zapret_dir = None;
-                    cfg.onboarded = false;
                 }
             }
             if let Some(dir) = cfg.byedpi_dir.clone() {
@@ -2586,6 +2771,8 @@ pub fn run() {
             check_app_update,
             install_app_update,
             health_check,
+            export_profile,
+            import_profile,
             set_goodbye_dir,
             check_goodbye_update,
             install_goodbye,
@@ -2595,6 +2782,9 @@ pub fn run() {
             install_core,
             set_core_port,
             set_core_server,
+            load_subscription,
+            select_server,
+            ping_servers,
             start_bypass,
             stop_bypass,
             run_tests,

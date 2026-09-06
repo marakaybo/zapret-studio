@@ -105,6 +105,11 @@ pub struct CoreConfig {
     /// Внутри лежит его uuid или пароль, поэтому наружу отдаётся только
     /// короткая сводка (см. `link::ServerLink::summary`).
     pub server: Option<String>,
+    /// Все известные серверы: из подписки и добавленные руками. Хранятся
+    /// ссылками целиком, поэтому наружу отдаются только сводками
+    pub servers: Vec<String>,
+    /// Ссылка на подписку, если серверы пришли оттуда
+    pub subscription: Option<String>,
     pub best: Option<String>,
     pub last_test_at: Option<String>,
 }
@@ -121,6 +126,8 @@ impl Default for CoreConfig {
             system_proxy: true,
             autostart: false,
             server: None,
+            servers: Vec::new(),
+            subscription: None,
             best: None,
             last_test_at: None,
         }

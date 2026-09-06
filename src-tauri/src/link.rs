@@ -337,6 +337,32 @@ pub fn parse(raw: &str) -> Result<ServerLink, String> {
     }
 }
 
+/// Разбирает подписку — то, что отдаёт панель по ссылке. Внутри обычно
+/// список ссылок, завёрнутый целиком в base64, но встречается и открытый
+/// текст. Строки, которые разобрать не вышло, пропускаем молча: панели любят
+/// подмешивать в список рекламные «серверы» с адресом вида «Осталось 30 дней».
+pub fn parse_many(text: &str) -> Vec<ServerLink> {
+    let text = text.trim();
+    // Открытый список узнаём по схеме; всё прочее пробуем раскодировать
+    let decoded = if text.contains("://") {
+        text.to_string()
+    } else {
+        match b64(text) {
+            Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+            Err(_) => return Vec::new(),
+        }
+    };
+    let mut out: Vec<ServerLink> = Vec::new();
+    for line in decoded.lines() {
+        let Ok(link) = parse(line) else { continue };
+        // Один и тот же сервер панели повторяют в разных списках
+        if !out.iter().any(|o| o.host == link.host && o.port == link.port && o.secret == link.secret) {
+            out.push(link);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -416,6 +442,37 @@ mod tests {
         assert_eq!(link.security, "tls");
         assert_eq!(link.label, "tokyo");
         assert_eq!(link.path, "/x");
+    }
+
+    /// Подписка приходит и в base64, и открытым текстом, и с мусором внутри.
+    #[test]
+    fn reads_a_subscription_in_any_shape() {
+        let plain = "vless://uuid-1@a.example.com:443?security=tls
+trojan://pass@b.example.com:8443
+";
+        let from_plain = parse_many(plain);
+        assert_eq!(from_plain.len(), 2);
+        assert_eq!(from_plain[0].host, "a.example.com");
+        assert_eq!(from_plain[1].proto, "trojan");
+
+        // то же самое, завёрнутое в base64
+        let from_b64 = parse_many(&to_b64(plain));
+        assert_eq!(from_b64.len(), 2);
+        assert_eq!(from_b64[0].host, from_plain[0].host);
+
+        // мусор между ссылками пропускается, а не роняет разбор
+        let messy = parse_many("осталось 30 дней
+vless://uuid-1@a.example.com:443
+
+# коммент");
+        assert_eq!(messy.len(), 1);
+
+        // повторы панели не дублируются
+        let twice = parse_many("vless://u@a.example.com:443
+vless://u@a.example.com:443#другое имя");
+        assert_eq!(twice.len(), 1);
+
+        assert!(parse_many("").is_empty());
     }
 
     #[test]

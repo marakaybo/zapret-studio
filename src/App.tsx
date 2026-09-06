@@ -362,6 +362,9 @@ function Shell() {
     }
   };
 
+  const applyProfile = (text: string) =>
+    act(() => api.importProfile(text));
+
   const openUrl = (url: string) =>
     api.openUrl(url).catch((e) => toast("err", errText(e)));
 
@@ -510,9 +513,13 @@ function Shell() {
     );
   }
 
-  // Папка zapret обязательна только для своего движка: с ByeDPI приложению
-  // хватает одного ciadpi.exe.
-  const onboarding = !snap.config.onboarded || (snap.engine === "zapret" && !snap.dirOk);
+  // Знакомство показываем только по-настоящему в первый раз. Пропавшая папка
+  // zapret — повод для плашки на главной, а не для того, чтобы отобрать у
+  // человека всё окно: во время установки она пропадает на несколько секунд
+  // сама по себе, и раньше поверх обновления вылезал экран первого запуска.
+  const onboarding = !snap.config.onboarded && !progress;
+  /// Движок выбран zapret, а папки нет — про это надо сказать, но мягко
+  const zapretMissing = snap.config.onboarded && snap.engine === "zapret" && !snap.dirOk;
   const presetEngine = snap.engine !== "zapret";
   const core = isCore(snap.engine) ? snap.engine : null;
 
@@ -583,6 +590,9 @@ function Shell() {
                     onInstallWarp={() => openUrl(snap.warp.installUrl)}
                     alarm={alarm}
                     onHealthCheck={runHealthCheck}
+                    zapretMissing={zapretMissing}
+                    onPickFolder={pickFolder}
+                    onInstallFresh={installFresh}
                     onGameFilter={(mode) => act(() => api.setGameFilter(mode))}
                     onIpsetMode={(mode) => act(() => api.setIpsetMode(mode))}
                     onEngine={switchEngine}
@@ -614,6 +624,9 @@ function Shell() {
                       }
                       onUpdateBlacklist={() => act(() => api.updateGoodbyeBlacklist())}
                       onServer={(url) => core && act(() => api.setCoreServer(core, url))}
+                      onSubscription={(url) => core && act(() => api.loadSubscription(core, url))}
+                      onSelectServer={(i) => core && act(() => api.selectServer(core, i))}
+                      onPingServers={() => (core ? api.pingServers(core) : Promise.resolve([]))}
                     />
                   ) : (
                     <Strategies
@@ -704,6 +717,8 @@ function Shell() {
                     appChecking={appChecking}
                     onCheckAppUpdate={checkAppUpdate}
                     onInstallAppUpdate={installAppUpdate}
+                    onExportProfile={() => api.exportProfile()}
+                    onImportProfile={applyProfile}
                     onHostsStatus={() => api.hostsStatus()}
                     onApplyHosts={async () => {
                       setBusy(true);

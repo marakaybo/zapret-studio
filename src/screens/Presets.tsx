@@ -3,7 +3,126 @@ import { useState } from "react";
 import { Alert, Crown, Download, Folder, Globe, Link, Pencil, Plus, Power, Refresh, Shield, Trash } from "../icons";
 import { Spinner } from "../components/ui";
 import { engineInfo, isCore } from "../engines";
-import type { Preset, PresetEngine, Snapshot } from "../types";
+import type { CoreState, Preset, PresetEngine, ServerPing, Snapshot } from "../types";
+
+/** Серверы ядра: подписка, список и выбор. */
+function Servers({
+  core,
+  busy,
+  onServer,
+  onSubscription,
+  onSelect,
+  onPing,
+}: {
+  core: CoreState;
+  busy: boolean;
+  onServer: (url: string) => void;
+  onSubscription: (url: string) => void;
+  onSelect: (index: number) => void;
+  onPing: () => Promise<ServerPing[]>;
+}) {
+  const [server, setServer] = useState("");
+  const [sub, setSub] = useState(core.subscription ?? "");
+  const [pings, setPings] = useState<Record<number, number | null>>({});
+  const [pinging, setPinging] = useState(false);
+
+  const measure = async () => {
+    setPinging(true);
+    try {
+      const list = await onPing();
+      setPings(Object.fromEntries(list.map((p) => [p.index, p.ms])));
+    } finally {
+      setPinging(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ marginBottom: 14 }}>
+      <div className="row" style={{ marginBottom: 6 }}>
+        <span style={{ color: core.server ? "var(--ok)" : "var(--dim)", display: "flex" }}>
+          <Link />
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 550 }}>Свой сервер</div>
+          <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+            {core.serverError
+              ? `Ссылка сохранена, но не разбирается: ${core.serverError}`
+              : core.server
+                ? `${core.server} — пресеты «через свой сервер» готовы`
+                : "Нужен только пресетам «через свой сервер». Фрагментация работает и без него"}
+          </div>
+        </div>
+        {core.servers.length > 1 && (
+          <button className="btn sm ghost" onClick={measure} disabled={busy || pinging}>
+            {pinging ? <Spinner /> : <Refresh />} Замерить
+          </button>
+        )}
+      </div>
+
+      <div className="server-row">
+        <input
+          className="input mono"
+          spellCheck={false}
+          placeholder="vless://… vmess://… trojan://… ss://…"
+          value={server}
+          onChange={(e) => setServer(e.target.value)}
+        />
+        <button
+          className="btn sm"
+          disabled={busy || (!server.trim() && !core.server)}
+          onClick={() => {
+            onServer(server.trim());
+            setServer("");
+          }}
+        >
+          {busy ? <Spinner /> : <Link />} Сохранить
+        </button>
+      </div>
+
+      <div className="server-row">
+        <input
+          className="input mono"
+          spellCheck={false}
+          placeholder="https://панель/подписка — заберу все серверы разом"
+          value={sub}
+          onChange={(e) => setSub(e.target.value)}
+        />
+        <button className="btn sm" disabled={busy || !sub.trim()} onClick={() => onSubscription(sub.trim())}>
+          {busy ? <Spinner /> : <Download />} Загрузить
+        </button>
+      </div>
+
+      {core.servers.length > 0 && (
+        <div className="list" style={{ marginTop: 10 }}>
+          {core.servers.map((label, i) => {
+            const ms = pings[i];
+            return (
+              <div
+                key={label + i}
+                className={`item ${core.selectedServer === i ? "selected" : ""}`}
+                onClick={() => !busy && onSelect(i)}
+              >
+                <span className={`dot ${core.selectedServer === i ? "on" : "off"}`} />
+                <span className="name" style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                  {label}
+                </span>
+                {ms === undefined ? null : ms === null ? (
+                  <span className="pill" style={{ color: "var(--bad)" }}>
+                    не отвечает
+                  </span>
+                ) : (
+                  <span className="pill" style={{ color: ms < 150 ? "var(--ok)" : "var(--warn)" }}>
+                    {ms} мс
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Форма своего пресета: название плюс строка параметров */
 function Editor({
@@ -78,6 +197,9 @@ export default function Presets({
   onPickFolder,
   onUpdateBlacklist,
   onServer,
+  onSubscription,
+  onSelectServer,
+  onPingServers,
 }: {
   snap: Snapshot;
   busy: boolean;
@@ -89,6 +211,9 @@ export default function Presets({
   onPickFolder: () => void;
   onUpdateBlacklist: () => void;
   onServer: (url: string) => void;
+  onSubscription: (url: string) => void;
+  onSelectServer: (index: number) => void;
+  onPingServers: () => Promise<ServerPing[]>;
 }) {
   const goodbye = snap.engine === "goodbyedpi";
   // У ядер пресет — это способ собрать конфиг, а не строка ключей: свои
@@ -97,7 +222,6 @@ export default function Presets({
   const info = engineInfo(snap.engine);
   const view: PresetEngine = core ?? (goodbye ? snap.goodbye : snap.byedpi);
   const [editing, setEditing] = useState<Preset | null | "new">(null);
-  const [server, setServer] = useState("");
 
   const meta = core
     ? {
@@ -225,42 +349,14 @@ export default function Presets({
       </div>
 
       {core ? (
-        <div className="card" style={{ marginBottom: 14 }}>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span style={{ color: core.server ? "var(--ok)" : "var(--dim)", display: "flex" }}>
-              <Link />
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 550 }}>Свой сервер</div>
-              <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
-                {core.serverError
-                  ? `Ссылка сохранена, но не разбирается: ${core.serverError}`
-                  : core.server
-                    ? `${core.server} — пресеты «через свой сервер» готовы`
-                    : "Нужен только пресетам «через свой сервер». Фрагментация работает и без него"}
-              </div>
-            </div>
-          </div>
-          <div className="server-row">
-            <input
-              className="input mono"
-              spellCheck={false}
-              placeholder={core.server ? "новая ссылка или пусто, чтобы забыть" : "vless://… vmess://… trojan://… ss://…"}
-              value={server}
-              onChange={(e) => setServer(e.target.value)}
-            />
-            <button
-              className="btn sm primary"
-              disabled={busy || (!server.trim() && !core.server)}
-              onClick={() => {
-                onServer(server.trim());
-                setServer("");
-              }}
-            >
-              {busy ? <Spinner /> : <Link />} Сохранить
-            </button>
-          </div>
-        </div>
+        <Servers
+          core={core}
+          busy={busy}
+          onServer={onServer}
+          onSubscription={onSubscription}
+          onSelect={onSelectServer}
+          onPing={onPingServers}
+        />
       ) : (
         <div className="row" style={{ marginBottom: 14 }}>
           <div style={{ flex: 1 }} />

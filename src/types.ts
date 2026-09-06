@@ -147,6 +147,16 @@ export interface CoreState extends PresetEngine {
   server: string | null;
   /** ссылка сохранена, но не разбирается */
   serverError: string | null;
+  /** все известные серверы сводками, без uuid и паролей */
+  servers: string[];
+  selectedServer: number | null;
+  subscription: string | null;
+}
+
+/** Отклик до сервера: время установки TCP-соединения */
+export interface ServerPing {
+  index: number;
+  ms: number | null;
 }
 
 export interface GoodbyeState extends PresetEngine {

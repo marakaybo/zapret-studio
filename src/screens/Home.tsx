@@ -35,6 +35,9 @@ export default function Home({
   onInstallWarp,
   alarm,
   onHealthCheck,
+  zapretMissing,
+  onPickFolder,
+  onInstallFresh,
 }: {
   snap: Snapshot;
   update: UpdateCheck | null;
@@ -56,6 +59,10 @@ export default function Home({
   /// Последняя тревога сторожа — null, пока всё хорошо
   alarm: Health | null;
   onHealthCheck: () => void;
+  /// Выбран zapret, но его папки нет — обход не запустится
+  zapretMissing: boolean;
+  onPickFolder: () => void;
+  onInstallFresh: () => void;
 }) {
   const running = snap.running;
   const bye = snap.byedpi;
@@ -128,6 +135,43 @@ export default function Home({
 
   return (
     <div className="screen">
+      <AnimatePresence>
+        {zapretMissing && (
+          <motion.div
+            key="no-zapret"
+            className="card"
+            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 14 }}
+            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
+            style={{
+              borderColor: "rgba(255,193,85,0.45)",
+              background: "linear-gradient(90deg, rgba(255,193,85,0.13), rgba(255,193,85,0.02))",
+              overflow: "hidden",
+            }}
+          >
+            <div className="row">
+              <span style={{ color: "var(--warn)", display: "flex", fontSize: 18 }}>
+                <Alert />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>Папки zapret нет на месте</div>
+                <div className="sub" style={{ marginTop: 2 }}>
+                  Выбран движок zapret, но его файлов не найти — папку удалили или перенесли.
+                  Скачаю свежую сборку или подключу твою. Остальные движки при этом работают:
+                  переключиться можно прямо здесь
+                </div>
+              </div>
+              <button className="btn sm ghost" onClick={onPickFolder} disabled={busy}>
+                <Folder /> Указать папку
+              </button>
+              <button className="btn" onClick={onInstallFresh} disabled={busy}>
+                {busy ? <Spinner /> : <Download />} Скачать
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {alarm && (
           <motion.div
