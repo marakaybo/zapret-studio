@@ -99,7 +99,7 @@ export default function NetMeter({ running }: { running: boolean }) {
     >
       <div className="row" style={{ alignItems: "center", gap: 14 }}>
         <div style={{ minWidth: 96 }}>
-          <div className="sub" style={{ fontSize: 11.5 }}>Отклик</div>
+          <div className="sub" style={{ fontSize: 11 }}>Отклик</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
             <span className="num" style={{ fontSize: 26, fontWeight: 650, color: color(last) }}>
               {last == null ? "—" : <Counter value={last} />}
@@ -110,7 +110,7 @@ export default function NetMeter({ running }: { running: boolean }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <Spark points={history} />
-          <div className="sub" style={{ fontSize: 11.5, marginTop: 4 }}>
+          <div className="sub" style={{ fontSize: 11, marginTop: 4 }}>
             {error
               ? error
               : `${via} · среднее ${avg == null ? "—" : `${avg} мс`}${
@@ -120,7 +120,7 @@ export default function NetMeter({ running }: { running: boolean }) {
         </div>
 
         <div style={{ textAlign: "right" }}>
-          <div className="sub" style={{ fontSize: 11.5 }}>Скорость</div>
+          <div className="sub" style={{ fontSize: 11 }}>Скорость</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 5, justifyContent: "flex-end" }}>
             <span className="num" style={{ fontSize: 19, fontWeight: 600 }}>
               {speed == null ? "—" : (speed / 1024).toFixed(1)}

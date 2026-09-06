@@ -35,7 +35,7 @@ function OwnTargets({
       <div className="row" style={{ marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600 }}>Свои сайты</div>
-          <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+          <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
             К встроенным целям добавятся твои. Пиши{" "}
             <span className="mono">example.com</span>, ссылку целиком или{" "}
             <span className="mono">host:443</span>. Что ответит чужой сайт, приложение знать не
@@ -75,11 +75,11 @@ function OwnTargets({
                 }}
                 title={fromFile ? "из utils/targets.txt — правится в файле" : undefined}
               >
-                <span className="mono" style={{ fontSize: 11.5 }}>
+                <span className="mono" style={{ fontSize: 11 }}>
                   {t}
                 </span>
                 {fromFile ? (
-                  <span className="sub" style={{ fontSize: 10.5 }}>
+                  <span className="sub" style={{ fontSize: 11 }}>
                     из файла
                   </span>
                 ) : (
@@ -156,7 +156,7 @@ function ResultCard({
                 style={{ background: scoreColor(r.score) }}
               />
             </div>
-            <span className="num" style={{ fontSize: 12.5, color: scoreColor(r.score), fontWeight: 600 }}>
+            <span className="num" style={{ fontSize: 12, color: scoreColor(r.score), fontWeight: 600 }}>
               <Counter value={r.score} decimals={0} suffix="%" />
             </span>
             <span style={{ fontSize: 12, color: "var(--dim)" }}>
@@ -191,7 +191,7 @@ function ResultCard({
           >
             <div className="targets">
               {r.error && (
-                <div style={{ gridColumn: "1 / -1", color: "var(--bad)", fontSize: 12.5 }}>{r.error}</div>
+                <div style={{ gridColumn: "1 / -1", color: "var(--bad)", fontSize: 12 }}>{r.error}</div>
               )}
               {r.targets.map((t) => (
                 <div className="target" key={t.id}>
@@ -289,7 +289,7 @@ export default function Tests({
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>Подключён Cloudflare WARP</div>
-              <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+              <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
                 Весь трафик идёт через туннель, включая проверки — результат покажет качество WARP,
                 а не обхода. Отключи его в настройках, если хочешь честный замер.
               </div>
@@ -308,7 +308,7 @@ export default function Tests({
                 ? `Выбрано ${picked.length} из ${all.length}`
                 : `${presets ? "Все пресеты" : "Все стратегии"} (${all.length})`}
             </div>
-            <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+            <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
               Примерно {estimate < 1 ? "меньше минуты" : `${estimate} мин`} · во время проверки интернет
               будет подмигивать, это нормально
             </div>
@@ -337,7 +337,7 @@ export default function Tests({
           </button>
           <div style={{ flex: 1 }} />
           <div className="row" style={{ gap: 9 }}>
-            <span className="sub" style={{ fontSize: 12.5 }}>Сравнить с «без обхода»</span>
+            <span className="sub" style={{ fontSize: 12 }}>Сравнить с «без обхода»</span>
             <Switch on={baseline} onChange={setBaseline} disabled={running} />
           </div>
         </div>
@@ -353,7 +353,7 @@ export default function Tests({
                 onClick={() => !running && toggle(s.id)}
                 style={{
                   cursor: running ? "default" : "pointer",
-                  fontSize: 11.5,
+                  fontSize: 11,
                   padding: "4px 9px",
                   background: on ? "rgba(124,107,255,0.18)" : undefined,
                   borderColor: on ? "rgba(124,107,255,0.45)" : undefined,
@@ -381,7 +381,7 @@ export default function Tests({
               <span style={{ fontWeight: 550 }}>
                 {stage.phase === "start" ? "Поднимаю" : "Проверяю"} «{stage.strategy}»
               </span>
-              <span className="sub" style={{ marginLeft: "auto", fontSize: 12.5 }}>
+              <span className="sub" style={{ marginLeft: "auto", fontSize: 12 }}>
                 {stage.index + 1} из {stage.total}
               </span>
             </div>
@@ -408,7 +408,7 @@ export default function Tests({
             <span className="rank">0</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 550 }}>Без обхода</div>
-              <div className="sub" style={{ fontSize: 12.5 }}>
+              <div className="sub" style={{ fontSize: 12 }}>
                 Точка отсчёта: столько работает, если обход выключен
               </div>
             </div>

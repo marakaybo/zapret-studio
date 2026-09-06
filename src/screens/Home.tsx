@@ -137,171 +137,125 @@ export default function Home({
     <div className="screen">
       <AnimatePresence>
         {zapretMissing && (
-          <motion.div
-            key="no-zapret"
-            className="card"
-            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 14 }}
-            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            style={{
-              borderColor: "rgba(255,193,85,0.45)",
-              background: "linear-gradient(90deg, rgba(255,193,85,0.13), rgba(255,193,85,0.02))",
-              overflow: "hidden",
-            }}
+          <motion.div key="no-zapret" className="notice warn"
+            initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
           >
-            <div className="row">
-              <span style={{ color: "var(--warn)", display: "flex", fontSize: 18 }}>
-                <Alert />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>Папки zapret нет на месте</div>
-                <div className="sub" style={{ marginTop: 2 }}>
-                  Выбран движок zapret, но его файлов не найти — папку удалили или перенесли.
-                  Скачаю свежую сборку или подключу твою. Остальные движки при этом работают:
-                  переключиться можно прямо здесь
-                </div>
+            <span className="n-icon">
+              <Alert />
+            </span>
+            <div className="n-body">
+              <div className="n-title">Папки zapret нет на месте</div>
+              <div className="n-text">
+                Файлов не найти — папку удалили или перенесли. Остальные движки работают
               </div>
-              <button className="btn sm ghost" onClick={onPickFolder} disabled={busy}>
-                <Folder /> Указать папку
-              </button>
-              <button className="btn" onClick={onInstallFresh} disabled={busy}>
-                {busy ? <Spinner /> : <Download />} Скачать
-              </button>
             </div>
+            <button className="btn sm ghost" onClick={onPickFolder} disabled={busy}>
+              <Folder /> Указать
+            </button>
+            <button className="btn sm" onClick={onInstallFresh} disabled={busy}>
+              {busy ? <Spinner /> : <Download />} Скачать
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {alarm && (
-          <motion.div
-            key="alarm"
-            className="card"
-            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 14 }}
-            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            style={{
-              borderColor: "rgba(255,92,122,0.4)",
-              background: "linear-gradient(90deg, rgba(255,92,122,0.13), rgba(255,92,122,0.02))",
-              overflow: "hidden",
-            }}
+          <motion.div key="alarm" className="notice bad"
+            initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
           >
-            <div className="row">
-              <span style={{ color: "var(--bad)", display: "flex", fontSize: 18 }}>
-                <Alert />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>Обход перестал пробивать</div>
-                <div className="sub" style={{ marginTop: 2 }}>
-                  Сторож в {alarm.checkedAt} не достучался: {alarm.failed.join(", ")}. Интернет при
-                  этом на месте — похоже, провайдер поменял фильтрацию. Прогони проверку заново,
-                  она подберёт рабочую стратегию
-                </div>
+            <span className="n-icon">
+              <Alert />
+            </span>
+            <div className="n-body">
+              <div className="n-title">Обход перестал пробивать</div>
+              <div className="n-text">
+                В {alarm.checkedAt} не достучался: {alarm.failed.join(", ")}. Интернет на месте —
+                похоже, провайдер поменял фильтрацию
               </div>
-              <button className="btn sm ghost" onClick={onHealthCheck} disabled={busy}>
-                <Refresh /> Ещё раз
-              </button>
-              <button className="btn danger" onClick={onGoTests} disabled={busy}>
-                <Gauge /> Проверить
-              </button>
             </div>
+            <button className="btn sm ghost" onClick={onHealthCheck} disabled={busy}>
+              <Refresh /> Ещё раз
+            </button>
+            <button className="btn sm danger" onClick={onGoTests} disabled={busy}>
+              <Gauge /> Проверить
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {snap.conflicts.length > 0 && (
-          <motion.div
-            key="conflicts"
-            className="card"
-            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 14 }}
-            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            style={{
-              borderColor: "rgba(255,92,122,0.4)",
-              background: "linear-gradient(90deg, rgba(255,92,122,0.13), rgba(255,92,122,0.02))",
-              overflow: "hidden",
-            }}
+          <motion.div key="conflicts" className="notice bad"
+            initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
           >
-            <div className="row">
-              <span style={{ color: "var(--bad)", display: "flex", fontSize: 18 }}>
-                <Alert />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>Работает другой обход блокировок</div>
-                <div className="sub" style={{ marginTop: 2 }}>
-                  {snap.conflicts
-                    .map((c) => (c.kind === "service" ? `служба ${c.name}` : c.name))
-                    .join(", ")}{" "}
-                  — делит драйвер с zapret. Пока он включён, проверка стратегий врёт.
-                </div>
+            <span className="n-icon">
+              <Alert />
+            </span>
+            <div className="n-body">
+              <div className="n-title">Работает другой обход блокировок</div>
+              <div className="n-text">
+                {snap.conflicts
+                  .map((c) => (c.kind === "service" ? `служба ${c.name}` : c.name))
+                  .join(", ")}{" "}
+                — делит драйвер с zapret, и проверка стратегий врёт
               </div>
-              <button className="btn danger" onClick={onStopConflicts} disabled={busy}>
-                {busy ? <Spinner /> : null} Остановить
-              </button>
             </div>
+            <button className="btn sm danger" onClick={onStopConflicts} disabled={busy}>
+              {busy ? <Spinner /> : null} Остановить
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {snap.stray && (
-          <motion.div
-            key="stray"
-            className="card"
-            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 14 }}
-            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            style={{
-              borderColor: "rgba(255,193,85,0.45)",
-              background: "linear-gradient(90deg, rgba(255,193,85,0.13), rgba(255,193,85,0.02))",
-              overflow: "hidden",
-            }}
+          <motion.div key="stray" className="notice warn"
+            initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
           >
-            <div className="row">
-              <span style={{ color: "var(--warn)", display: "flex", fontSize: 18 }}>
-                <Alert />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600 }}>Работает не тот движок: {snap.stray}</div>
-                <div className="sub" style={{ marginTop: 2 }}>
-                  Скорее всего остался от прошлого запуска. Он правит те же пакеты, что и выбранный
-                  движок, — обход ведёт себя странно, а проверка меряет его, а не то, что ты выбрал.
-                </div>
+            <span className="n-icon">
+              <Alert />
+            </span>
+            <div className="n-body">
+              <div className="n-title">Работает не тот движок: {snap.stray}</div>
+              <div className="n-text">
+                Остался от прошлого запуска и правит те же пакеты — проверка меряет его
               </div>
-              <button className="btn" onClick={onStopStray} disabled={busy}>
-                {busy ? <Spinner /> : null} Остановить
-              </button>
             </div>
+            <button className="btn sm" onClick={onStopStray} disabled={busy}>
+              {busy ? <Spinner /> : null} Остановить
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
       <AnimatePresence>
         {update?.hasUpdate && (
-          <motion.div
-            key="update"
-            className="card"
-            initial={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 18 }}
-            exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
-            style={{
-              borderColor: "rgba(124,107,255,0.4)",
-              background: "linear-gradient(90deg, rgba(124,107,255,0.13), rgba(53,214,255,0.04))",
-              overflow: "hidden",
-            }}
+          <motion.div key="update" className="notice info"
+            initial={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, y: 0, height: "auto", marginBottom: 11 }}
+            exit={{ opacity: 0, y: -10, height: 0, marginBottom: 0 }}
           >
-            <div className="row">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600 }}>Вышла новая версия {update.latest}</div>
-                <div className="sub" style={{ marginTop: 2 }}>
-                  Установлена {update.current ?? "—"}. Обновлю за пару секунд и сохраню твои списки.
-                </div>
+            <span className="n-icon">
+              <Download />
+            </span>
+            <div className="n-body">
+              <div className="n-title">Вышла новая версия zapret {update.latest}</div>
+              <div className="n-text">
+                Установлена {update.current ?? "—"}. Обновлю за пару секунд и сохраню твои списки
               </div>
-              <button className="btn primary" onClick={onUpdate} disabled={busy}>
-                {busy ? <Spinner /> : <Download />} Обновить
-              </button>
             </div>
+            <button className="btn sm primary" onClick={onUpdate} disabled={busy}>
+              {busy ? <Spinner /> : <Download />} Обновить
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -315,7 +269,7 @@ export default function Home({
         <div className="row">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>Движок обхода</div>
-            <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+            <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
               {info.short}
             </div>
           </div>
@@ -437,7 +391,7 @@ export default function Home({
                   ? "подключён"
                   : "отключён"}
             </div>
-            <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+            <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
               {!snap.warp.installed
                 ? "Это отдельная программа Cloudflare, приложение её не ставит. Пока её нет, переключателя и не будет — скачай, и он появится сам"
                 : snap.warp.connected
@@ -447,7 +401,7 @@ export default function Home({
             {probe && (
               <div
                 style={{
-                  fontSize: 12.5,
+                  fontSize: 12,
                   marginTop: 4,
                   color: probe.error ? "var(--warn)" : probe.active ? "var(--ok)" : "var(--muted)",
                 }}
@@ -620,7 +574,7 @@ export default function Home({
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 550 }}>Лучшая по последней проверке — «{bestTitle}»</div>
-              <div className="sub" style={{ fontSize: 12.5 }}>
+              <div className="sub" style={{ fontSize: 12 }}>
                 {best.ok} из {best.total} проверок пройдено
                 {best.avgMs != null ? ` · отклик ${best.avgMs} мс` : ""}
               </div>
@@ -645,7 +599,7 @@ export default function Home({
               <div style={{ fontWeight: 550 }}>
                 {view ? "Пресеты ещё не проверялись" : "Стратегии ещё не проверялись"}
               </div>
-              <div className="sub" style={{ fontSize: 12.5 }}>
+              <div className="sub" style={{ fontSize: 12 }}>
                 Прогоню все по очереди и покажу, что реально пробивает Discord и YouTube
               </div>
             </div>

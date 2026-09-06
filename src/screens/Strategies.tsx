@@ -121,7 +121,7 @@ export default function Strategies({
                     style={{
                       overflow: "hidden",
                       fontFamily: "Cascadia Mono, Consolas, monospace",
-                      fontSize: 11.5,
+                      fontSize: 11,
                       color: "var(--muted)",
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-all",

@@ -70,7 +70,7 @@ function CoreCard({
           {active ? "сейчас работает этот движок" : "запасной движок обхода"}
         </span>
       </div>
-      <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+      <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
         {info.short}. Пресеты с фрагментацией работают сами по себе, сервер им не нужен. Ссылка на
         свой сервер нужна только пресетам «через свой сервер» — с ней это уже туннель, а не обход.
       </p>
@@ -357,7 +357,7 @@ export default function Settings({
             </span>
             <h2 style={{ flex: 1 }}>Само приложение</h2>
           </div>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Zapret Studio следит за обновлениями пяти чужих программ — и за своими тоже.
             Установщик приложение скачает и запустит, но только по нажатию: ставить себя само
             по таймеру оно не будет.
@@ -386,7 +386,7 @@ export default function Settings({
           {appUpdate?.hasUpdate && appUpdate.release?.notes && (
             <div
               className="sub"
-              style={{ fontSize: 12.5, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto", paddingBottom: 8 }}
+              style={{ fontSize: 12, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "auto", paddingBottom: 8 }}
             >
               {appUpdate.release.notes.slice(0, 800)}
             </div>
@@ -414,7 +414,7 @@ export default function Settings({
 
         <div className="card">
           <h2 style={{ marginBottom: 4 }}>Профиль настроек</h2>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Подобранную стратегию можно передать другому человеку: у одного провайдера обычно
             работает одно и то же, а подбирать заново — полчаса. Внутри только выбор — движок,
             пресеты, порты, свои сайты для проверки. Ссылок на серверы там нет: в них твои uuid
@@ -446,7 +446,7 @@ export default function Settings({
               spellCheck={false}
               value={mine}
               onFocus={(e) => e.currentTarget.select()}
-              style={{ marginBottom: 10, fontSize: 11.5, userSelect: "text" }}
+              style={{ marginBottom: 10, fontSize: 11, userSelect: "text" }}
             />
           )}
 
@@ -466,7 +466,7 @@ export default function Settings({
                 placeholder='{"version":1,"engine":"zapret", …}'
                 value={theirs}
                 onChange={(e) => setTheirs(e.target.value)}
-                style={{ flex: 1, fontSize: 11.5 }}
+                style={{ flex: 1, fontSize: 11 }}
               />
               <button
                 className="btn sm primary"
@@ -578,7 +578,7 @@ export default function Settings({
 
         <div className="card">
           <h2 style={{ marginBottom: 4 }}>Сторож</h2>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Блокировки меняются молча: вчера стратегия работала, сегодня нет, и узнаёшь об этом,
             когда не грузится YouTube. Сторож раз в несколько минут тихо стучится в пару целей и
             говорит, если обход перестал пробивать. Упавшую сеть от упавшего обхода он отличает
@@ -662,7 +662,7 @@ export default function Settings({
               {snap.engine === "goodbyedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
             </span>
           </div>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Тот же драйвер WinDivert, что у zapret, но настраивается ключами запуска: режимы
             −1…−9 плюс списки заблокированных доменов. Работает от администратора и не может
             быть включён одновременно с zapret.
@@ -744,7 +744,7 @@ export default function Settings({
               {snap.engine === "byedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
             </span>
           </div>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Локальный SOCKS5-прокси вместо драйвера: ломает запросы по дороге к серверу.
             Прав администратора не требует и WinDivert не занимает, но заворачивает только TCP тех
             приложений, что читают системный прокси, — голос Discord и игры остаются за zapret.
@@ -838,7 +838,7 @@ export default function Settings({
 
         <div className="card">
           <h2 style={{ marginBottom: 10 }}>Инструменты zapret</h2>
-          <p className="sub" style={{ marginBottom: 4, fontSize: 12.5 }}>
+          <p className="sub" style={{ marginBottom: 4, fontSize: 12 }}>
             То же, что в меню service.bat, только без консоли. Игровой фильтр и список адресов
             переключаются на главной.
           </p>
@@ -927,7 +927,7 @@ export default function Settings({
 
         <div className="card">
           <h2 style={{ marginBottom: 4 }}>Cloudflare WARP</h2>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 4 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
             Не обход, а туннель, но живёт рядом: в России серверы Cloudflare часто недоступны,
             и WARP не подключается, пока не включишь обход. Обратное тоже верно — включённый
             WARP уводит в туннель весь трафик, включая проверку стратегий.
@@ -995,7 +995,7 @@ export default function Settings({
               {diagBusy ? <Spinner /> : <Shield />} Проверить
             </button>
           </div>
-          <p className="sub" style={{ fontSize: 12.5 }}>
+          <p className="sub" style={{ fontSize: 12 }}>
             Ищу причины, по которым обход может не работать: конфликты с другими обходами, прокси,
             отсутствующий драйвер. Отдельно показываю внешний адрес — если страна не твоя, трафик
             уже идёт через VPN, и проверка меряет его, а не обход.
@@ -1021,10 +1021,10 @@ export default function Settings({
                     </span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontWeight: 550 }}>{c.title}</div>
-                      <div className="sub" style={{ fontSize: 12.5, wordBreak: "break-all" }}>
+                      <div className="sub" style={{ fontSize: 12, wordBreak: "break-all" }}>
                         {c.detail}
                       </div>
-                      {c.hint && <div style={{ fontSize: 12.5, color: "var(--warn)", marginTop: 3 }}>{c.hint}</div>}
+                      {c.hint && <div style={{ fontSize: 12, color: "var(--warn)", marginTop: 3 }}>{c.hint}</div>}
                     </div>
                     {c.items && c.items.length > 0 && (
                       <button className="btn sm danger" onClick={onStopConflicts} disabled={busy}>
@@ -1038,7 +1038,7 @@ export default function Settings({
           </AnimatePresence>
         </div>
 
-        <div className="card" style={{ color: "var(--dim)", fontSize: 12.5 }}>
+        <div className="card" style={{ color: "var(--dim)", fontSize: 12 }}>
           Zapret Studio {snap.appVersion} — оболочка над пятью чужими программами:{" "}
           {ENGINES.map((e, i) => (
             <span key={e.id}>

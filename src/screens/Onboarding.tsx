@@ -69,7 +69,7 @@ export default function Onboarding({
               <div className="d">{c.desc}</div>
               <div
                 className="sub"
-                style={{ marginTop: 6, fontSize: 12.5, color: c.primary ? "var(--accent-2)" : "var(--dim)" }}
+                style={{ marginTop: 6, fontSize: 12, color: c.primary ? "var(--accent-2)" : "var(--dim)" }}
               >
                 {c.primary ? "Рекомендую →" : "Выбрать папку →"}
               </div>
@@ -97,7 +97,7 @@ export default function Onboarding({
             системный прокси Windows заворачивает в него браузеры и Discord. Прав администратора
             не нужно, качать целую сборку тоже. Zapret можно подключить позже.
           </div>
-          <div className="sub" style={{ marginTop: 6, fontSize: 12.5, color: "var(--dim)" }}>
+          <div className="sub" style={{ marginTop: 6, fontSize: 12, color: "var(--dim)" }}>
             Поставить ByeDPI →
           </div>
         </motion.button>

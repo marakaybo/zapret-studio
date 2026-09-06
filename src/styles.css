@@ -14,6 +14,21 @@
   --warn: #ffc155;
   --bad: #ff5c7a;
   --radius: 16px;
+
+  /* Одна шкала на всё приложение. Раньше размеры расползлись по разметке:
+     10.5, 11.5, 12.5, 13 — глаз читает это как небрежность, даже не понимая,
+     что именно ему мешает. */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 21px;
+
+  /* Акцент один и сплошной. Градиент остаётся только там, где он и есть
+     лицо приложения: на знаке в заголовке и на главной кнопке. Везде ещё
+     он спорил сам с собой — подсветка меню, кнопки, переключатели и
+     выбранный движок тянули внимание одинаково сильно. */
+  --accent-solid: #6d5cf6;
   --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
   --grad: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
 }
@@ -212,7 +227,7 @@ button {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: var(--grad);
+  background: var(--accent-solid);
   color: #08090d;
   font-size: 10px;
   font-weight: 700;
@@ -235,7 +250,7 @@ button {
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px 28px 32px;
+  padding: 18px 22px 24px;
 }
 
 .screen {
@@ -244,23 +259,23 @@ button {
 }
 
 h1 {
-  font-size: 22px;
+  font-size: var(--fs-xl);
   font-weight: 650;
   letter-spacing: -0.2px;
 }
 
 h2 {
-  font-size: 15px;
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 
 .sub {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .head {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 /* ---------------------------------------------------------------- блоки */
@@ -269,7 +284,7 @@ h2 {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.028), rgba(255, 255, 255, 0.008));
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 14px;
 }
 
 .row {
@@ -281,12 +296,12 @@ h2 {
 .grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 11px;
 }
 
 .stack {
   display: grid;
-  gap: 14px;
+  gap: 11px;
 }
 
 .btn {
@@ -313,11 +328,11 @@ h2 {
 }
 
 .btn.primary {
-  background: var(--grad);
+  background: var(--accent-solid);
   border-color: transparent;
-  color: #07080c;
+  color: #fff;
   font-weight: 650;
-  box-shadow: 0 8px 26px rgba(124, 107, 255, 0.3);
+  box-shadow: 0 6px 18px rgba(109, 92, 246, 0.28);
 }
 
 .btn.primary:hover:not(:disabled) {
@@ -351,13 +366,13 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 12px 0 4px;
+  padding: 6px 0 2px;
 }
 
 .power {
   position: relative;
-  width: 188px;
-  height: 188px;
+  width: 128px;
+  height: 128px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -375,7 +390,7 @@ h2 {
 
 .power-core {
   position: absolute;
-  inset: 12px;
+  inset: 9px;
   border-radius: 50%;
   background: radial-gradient(circle at 50% 30%, #1d2130, #0d0f16 70%);
   border: 1px solid var(--line);
@@ -387,30 +402,30 @@ h2 {
 }
 
 .power-core svg {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
 }
 
 .power-halo {
   position: absolute;
-  inset: -24px;
+  inset: -18px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(61, 220, 151, 0.24), transparent 62%);
   pointer-events: none;
 }
 
 .power-label {
-  font-size: 13px;
+  font-size: var(--fs-xs);
   color: var(--muted);
   letter-spacing: 0.3px;
 }
 
 .status-line {
-  margin-top: 18px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 14px;
+  font-size: var(--fs-md);
 }
 
 .dot {
@@ -453,14 +468,14 @@ h2 {
 
 .list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 13px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.02);
@@ -503,7 +518,7 @@ h2 {
 }
 
 .pill {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 650;
   padding: 3px 9px;
   border-radius: 999px;
@@ -578,8 +593,9 @@ h2 {
 }
 
 .rank.top {
-  background: var(--grad);
-  color: #07080c;
+  background: rgba(255, 193, 85, 0.16);
+  border: 1px solid rgba(255, 193, 85, 0.32);
+  color: var(--warn);
 }
 
 .groups {
@@ -694,7 +710,7 @@ h2 {
 }
 
 .switch.on {
-  background: var(--grad);
+  background: var(--accent-solid);
   border-color: transparent;
 }
 
@@ -708,8 +724,8 @@ h2 {
 .setting {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 13px 0;
+  gap: 14px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -751,7 +767,7 @@ h2 {
 }
 
 .seg button.on {
-  color: #07080c;
+  color: #fff;
   font-weight: 600;
 }
 
@@ -759,13 +775,13 @@ h2 {
   position: absolute;
   inset: 0;
   border-radius: 8px;
-  background: var(--grad);
+  background: var(--accent-solid);
 }
 
 .check {
   display: flex;
   gap: 12px;
-  padding: 12px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -806,7 +822,7 @@ h2 {
 
 .progress .fill {
   height: 100%;
-  background: var(--grad);
+  background: var(--accent-solid);
   border-radius: 5px;
 }
 
@@ -864,9 +880,9 @@ h2 {
 }
 
 .hero-mark {
-  width: 68px;
-  height: 68px;
-  border-radius: 22px;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
   background: var(--grad);
   display: grid;
   place-items: center;
@@ -1023,7 +1039,7 @@ textarea.input {
 }
 
 .engine-pick button.on {
-  color: #07080c;
+  color: #fff;
   font-weight: 650;
 }
 
@@ -1031,7 +1047,7 @@ textarea.input {
   position: absolute;
   inset: 0;
   border-radius: 8px;
-  background: var(--grad);
+  background: var(--accent-solid);
 }
 
 /* Строка про сервер ядра: ссылка длинная, её нельзя ужимать в одну колонку */
@@ -1046,4 +1062,64 @@ textarea.input {
   flex: 1;
   min-width: 0;
   font-size: 12.5px;
+}
+
+/* Предупреждения не должны спорить с состоянием. Раньше каждое было
+   карточкой во весь экран, залитой цветом, — и самым ярким пятном на
+   главной оказывалась не работа обхода, а жалоба на неё. Теперь это узкая
+   строка с цветной полосой слева: заметно, но знает своё место. */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--dim);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.022);
+  overflow: hidden;
+}
+
+.notice .n-icon {
+  flex: none;
+  display: flex;
+  font-size: 15px;
+  color: var(--dim);
+}
+
+.notice .n-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice .n-title {
+  font-weight: 600;
+  font-size: var(--fs-md);
+}
+
+.notice .n-text {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  margin-top: 1px;
+}
+
+.notice.bad {
+  border-left-color: var(--bad);
+}
+.notice.bad .n-icon {
+  color: var(--bad);
+}
+
+.notice.warn {
+  border-left-color: var(--warn);
+}
+.notice.warn .n-icon {
+  color: var(--warn);
+}
+
+.notice.info {
+  border-left-color: var(--accent);
+}
+.notice.info .n-icon {
+  color: var(--accent);
 }

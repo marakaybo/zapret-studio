@@ -105,7 +105,7 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>С чего начать</div>
-              <div className="sub" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+              <div className="sub" style={{ fontSize: 12, lineHeight: 1.6 }}>
                 1. Возьми zapret и запусти проверку — она сама найдёт рабочую стратегию.
                 <br />
                 2. Не помогло или нет прав администратора — переключись на ByeDPI и проверь снова.
@@ -120,7 +120,7 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
 
         <div className="card">
           <h2 style={{ marginBottom: 4 }}>Чем они отличаются</h2>
-          <p className="sub" style={{ fontSize: 12.5, marginBottom: 10 }}>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 10 }}>
             Первые три ломают блокировку на месте, последние два умеют ещё и увести трафик на твой
             сервер. Нажми на карточку, чтобы переключиться.
           </p>
@@ -140,16 +140,20 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
                   {snap.engine === e.id && <span className="pill live">выбран</span>}
                   <span className="pill">{e.admin ? "нужен админ" : "без админа"}</span>
                   <span style={{ flex: 1 }} />
-                  <span className="sub" style={{ fontSize: 11.5 }}>
+                  <span className="sub" style={{ fontSize: 11 }}>
                     {e.repo}
                   </span>
                 </div>
-                <div className="sub" style={{ fontSize: 12.5 }}>
+                <div className="sub" style={{ fontSize: 12 }}>
                   {e.short}
                 </div>
-                <div style={{ fontSize: 12.5, color: "var(--ok)" }}>Когда брать: {e.when}</div>
-                <div style={{ fontSize: 12.5, color: "var(--warn)" }}>Чем платишь: {e.cost}</div>
-                <div className="sub" style={{ fontSize: 11.5 }}>
+                <div className="sub">
+                  <span style={{ color: "var(--ok)", fontWeight: 600 }}>Когда брать:</span> {e.when}
+                </div>
+                <div className="sub">
+                  <span style={{ color: "var(--warn)", fontWeight: 600 }}>Чем платишь:</span> {e.cost}
+                </div>
+                <div className="sub" style={{ fontSize: 11 }}>
                   Под обход попадает: {e.covers}
                 </div>
               </motion.div>
@@ -170,7 +174,7 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
               <span className="check-icon ok">{c.engine ? "→" : "?"}</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 550 }}>{c.task}</div>
-                <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+                <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
                   {c.why}
                 </div>
               </div>
@@ -206,7 +210,7 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
               </span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 550 }}>{r.title}</div>
-                <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+                <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
                   {r.text}
                 </div>
               </div>
@@ -221,7 +225,7 @@ export default function Tips({ snap, onEngine }: { snap: Snapshot; onEngine: (e:
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>Про свой сервер</div>
-              <div className="sub" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+              <div className="sub" style={{ fontSize: 12, lineHeight: 1.6 }}>
                 У sing-box есть ещё два пресета «Весь трафик»: он поднимает сетевой адаптер и
                 забирает трафик всей машины, а не только тех программ, что читают системный прокси.
                 Обходить лучше он от этого не станет — приём остаётся прежним, — но со своим

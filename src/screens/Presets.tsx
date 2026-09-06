@@ -44,7 +44,7 @@ function Servers({
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 550 }}>Свой сервер</div>
-          <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+          <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
             {core.serverError
               ? `Ссылка сохранена, но не разбирается: ${core.serverError}`
               : core.server
@@ -103,7 +103,7 @@ function Servers({
                 onClick={() => !busy && onSelect(i)}
               >
                 <span className={`dot ${core.selectedServer === i ? "on" : "off"}`} />
-                <span className="name" style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                <span className="name" style={{ flex: 1, minWidth: 0, fontSize: 12 }}>
                   {label}
                 </span>
                 {ms === undefined ? null : ms === null ? (
@@ -286,7 +286,7 @@ export default function Presets({
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>{meta.emptyTitle}</div>
-              <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+              <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
                 {meta.emptyDesc}
               </div>
             </div>
@@ -325,7 +325,7 @@ export default function Presets({
                   ? `Прокси работает на 127.0.0.1:${core ? core.port : snap.byedpi.port}`
                   : "Прокси выключен"}
             </div>
-            <div className="sub" style={{ fontSize: 12.5, marginTop: 2 }}>
+            <div className="sub" style={{ fontSize: 12, marginTop: 2 }}>
               {goodbye
                 ? snap.goodbye.blacklist != null
                   ? `В списке заблокированного ${snap.goodbye.blacklist} доменов — по нему работают пресеты «Россия»`
@@ -415,10 +415,10 @@ export default function Presets({
                     )}
                     {!p.builtin && <span className="pill">своя</span>}
                   </div>
-                  <div className="sub" style={{ fontSize: 12.5, marginTop: 3 }}>
+                  <div className="sub" style={{ fontSize: 12, marginTop: 3 }}>
                     {p.desc}
                   </div>
-                  <div className="mono" style={{ fontSize: 11.5, color: "var(--dim)", marginTop: 6, userSelect: "text" }}>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--dim)", marginTop: 6, userSelect: "text" }}>
                     {p.args.join(" ")}
                   </div>
                   {core && p.id.includes("server") && !core.server && (

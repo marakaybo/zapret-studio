@@ -118,7 +118,7 @@ function InstallOverlay({
           <Bolt />
         </motion.div>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>{phase}</div>
-        <div className="sub" style={{ fontSize: 12.5, marginBottom: 16 }}>
+        <div className="sub" style={{ fontSize: 12, marginBottom: 16 }}>
           {progress.detail}
         </div>
         <div className="progress">
