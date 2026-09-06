@@ -49,6 +49,23 @@ const CONFLICT_SERVICES: &[&str] = &[
 // GoodbyeDPI. Остановить его кнопкой «Остановить чужие обходы» — значит убить
 // собственный обход, что раньше и происходило.
 
+/// Все запущенные процессы одним вызовом. Раньше на каждое имя из списка
+/// шёл свой `tasklist` — восемь запусков процессов только на проверку
+/// конфликтов, и так на каждый снимок состояния. На Windows запуск процесса
+/// стоит десятки миллисекунд, и это было заметно глазом.
+pub fn running_processes() -> Vec<String> {
+    let Ok(out) = run_hidden("tasklist", &["/NH", "/FO", "CSV"]) else {
+        return Vec::new();
+    };
+    out_text(&out)
+        .lines()
+        // Строка вида "chrome.exe","1234","Console","1","123 456 КБ"
+        .filter_map(|l| l.trim().strip_prefix('"'))
+        .filter_map(|l| l.split('"').next())
+        .map(str::to_lowercase)
+        .collect()
+}
+
 fn tasklist_has(name: &str) -> bool {
     run_hidden("tasklist", &["/FI", &format!("IMAGENAME eq {name}"), "/NH"])
         .map(|o| out_text(&o).to_lowercase().contains(&name.to_lowercase()))
@@ -84,11 +101,12 @@ pub fn scan_conflicts(own: &[&str]) -> Vec<ConflictItem> {
             found.push(ConflictItem { kind: "service".into(), name: s.to_string() });
         }
     }
+    let running = running_processes();
     for p in CONFLICT_PROCESSES {
         if own.iter().any(|o| o.eq_ignore_ascii_case(p)) {
             continue;
         }
-        if tasklist_has(p) {
+        if running.iter().any(|r| r == &p.to_lowercase()) {
             found.push(ConflictItem { kind: "process".into(), name: p.to_string() });
         }
     }

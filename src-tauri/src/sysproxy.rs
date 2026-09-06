@@ -31,14 +31,12 @@ pub struct ProxyState {
     pub bypass: String,
 }
 
-fn read_value(name: &str) -> Option<String> {
-    let out = run_hidden("reg", &["query", KEY, "/v", name]).ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let text = out_text(&out);
-    let line = text.lines().find(|l| l.contains(name) && l.contains("REG_"))?;
-    // Формат строки: "    ProxyServer    REG_SZ    socks=socks5://127.0.0.1:1080"
+/// Достаёт значение из вывода `reg query` целой ветки.
+/// Формат строки: "    ProxyServer    REG_SZ    socks=socks5://127.0.0.1:1080"
+fn value_from(text: &str, name: &str) -> Option<String> {
+    let line = text
+        .lines()
+        .find(|l| l.split_whitespace().next() == Some(name) && l.contains("REG_"))?;
     let mut parts = line.split_whitespace();
     parts.next()?;
     parts.next()?;
@@ -46,11 +44,19 @@ fn read_value(name: &str) -> Option<String> {
     Some(rest.join(" "))
 }
 
+/// Читает всю ветку разом. Раньше на каждое из трёх значений шёл свой запуск
+/// `reg` — а состояние прокси спрашивается на каждый снимок, то есть после
+/// каждого действия пользователя.
 pub fn read() -> ProxyState {
+    let text = run_hidden("reg", &["query", KEY])
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| out_text(&o))
+        .unwrap_or_default();
     ProxyState {
-        enabled: read_value("ProxyEnable").map(|v| v.trim() != "0x0").unwrap_or(false),
-        server: read_value("ProxyServer").unwrap_or_default(),
-        bypass: read_value("ProxyOverride").unwrap_or_default(),
+        enabled: value_from(&text, "ProxyEnable").map(|v| v.trim() != "0x0").unwrap_or(false),
+        server: value_from(&text, "ProxyServer").unwrap_or_default(),
+        bypass: value_from(&text, "ProxyOverride").unwrap_or_default(),
     }
 }
 
@@ -120,10 +126,11 @@ pub fn restore(saved: Option<&ProxyState>) -> Result<(), String> {
         _ => {
             set_enabled(false)?;
             set_string("ProxyServer", "")?;
-            if saved.map(|s| s.bypass.is_empty()).unwrap_or(true) {
-                set_string("ProxyOverride", "")?;
-            } else {
-                set_string("ProxyOverride", &saved.unwrap().bypass)?;
+            // Список исключений возвращаем, если он был не пустым: там могут
+            // быть адреса рабочей сети, которые прописывал не пользователь
+            match saved.filter(|s| !s.bypass.is_empty()) {
+                Some(s) => set_string("ProxyOverride", &s.bypass)?,
+                None => set_string("ProxyOverride", "")?,
             }
         }
     }
@@ -156,6 +163,25 @@ fn notify() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Разбор вывода `reg query` целой ветки: значения лежат вперемешку,
+    /// и цепляться к подстроке нельзя — ProxyEnable и ProxyEnablePerUser
+    /// начинаются одинаково.
+    #[test]
+    fn picks_the_right_value_out_of_a_whole_branch() {
+        let text = "\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\r\n    MigrateProxy    REG_DWORD    0x1\r\n    ProxyEnable    REG_DWORD    0x1\r\n    ProxyServer    REG_SZ    socks=socks5://127.0.0.1:1080\r\n    ProxyOverride    REG_SZ    localhost;127.*;<local>\r\n";
+        assert_eq!(value_from(text, "ProxyEnable").as_deref(), Some("0x1"));
+        assert_eq!(
+            value_from(text, "ProxyServer").as_deref(),
+            Some("socks=socks5://127.0.0.1:1080")
+        );
+        assert_eq!(
+            value_from(text, "ProxyOverride").as_deref(),
+            Some("localhost;127.*;<local>")
+        );
+        assert!(value_from(text, "ProxyEnablePerUser").is_none());
+        assert!(value_from("", "ProxyEnable").is_none());
+    }
 
     #[test]
     fn socks_value_carries_explicit_scheme() {

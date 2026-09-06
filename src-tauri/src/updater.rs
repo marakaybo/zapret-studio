@@ -372,18 +372,25 @@ pub async fn install(
 
     let root = crate::sysutil::resolve_zapret_root(&staging).ok_or("в архиве не найден bin/winws.exe")?;
 
-    // 3. Замена: старая папка уезжает в бэкап, новая встаёт на её место
+    // 3. Замена: старая папка уезжает в бэкап, новая встаёт на её место.
+    // Если второй шаг сорвётся, прежнюю папку надо вернуть: иначе человек
+    // остаётся вообще без zapret, и хуже того — не понимает, куда он делся
     emit(app, "apply", 92.0, "Переношу настройки…");
+    let mut backed_up = false;
     if target.exists() {
         copy_user_files(target, &root);
         std::fs::rename(target, &backup).map_err(|e| format!("не удалось освободить папку: {e}"))?;
+        backed_up = true;
     }
-    if root != staging {
-        std::fs::rename(&root, target).map_err(|e| format!("не удалось установить: {e}"))?;
+    let from = if root != staging { &root } else { &staging };
+    if let Err(e) = std::fs::rename(from, target) {
+        if backed_up {
+            let _ = std::fs::rename(&backup, target);
+        }
         let _ = std::fs::remove_dir_all(&staging);
-    } else {
-        std::fs::rename(&staging, target).map_err(|e| format!("не удалось установить: {e}"))?;
+        return Err(format!("не удалось установить: {e}. Прежняя версия оставлена на месте"));
     }
+    let _ = std::fs::remove_dir_all(&staging);
     let _ = std::fs::remove_dir_all(&backup);
 
     crate::strategies::ensure_user_lists(target);

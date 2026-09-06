@@ -52,6 +52,8 @@ pub struct AppState {
     /// Сколько осмотров подряд сторож видел мёртвый обход. Нужен, чтобы не
     /// повторять одно и то же уведомление и чтобы чинить по нарастающей
     watchdog_fails: Arc<AtomicUsize>,
+    /// Пока один движок поднимается или гасится, второй такой же запрос ждёт
+    engine_lock: Mutex<()>,
 }
 
 impl AppState {
@@ -63,6 +65,29 @@ impl AppState {
         config::save(&path, &next)?;
         *self.cfg.lock().unwrap() = next;
         Ok(())
+    }
+    /// Меняет настройки, не отпуская замок: прочитать, поправить, записать —
+    /// одним действием.
+    ///
+    /// Обычная пара `config()` + `set_config()` оставляет между собой щель:
+    /// кто-то другой успевает записать своё, а наша запись это затирает.
+    /// Пользователь при этом ничего не делал неправильно — он просто щёлкнул
+    /// переключатель в ту же секунду, когда фоновая проверка обновлений
+    /// сохраняла отметку времени, и настройка молча не сохранилась.
+    ///
+    /// Поэтому так пишут все, кто работает в фоне: сторож, проверки
+    /// обновлений, автоустановка, прогон стратегий. Команды из интерфейса
+    /// человек запускает по одной, и им хватает обычной пары — а если такая
+    /// команда всё же перебьёт фоновую отметку, потеряется лишь она,
+    /// и следующий круг поставит её заново.
+    ///
+    /// Внутри замыкания трогать `state` нельзя: замок не рекурсивный.
+    fn update_config<T>(&self, change: impl FnOnce(&mut AppConfig) -> T) -> Result<T, String> {
+        let path = self.cfg_path.lock().unwrap().clone();
+        let mut guard = self.cfg.lock().unwrap();
+        let result = change(&mut guard);
+        config::save(&path, &guard)?;
+        Ok(result)
     }
     fn root(&self) -> Option<PathBuf> {
         self.cfg.lock().unwrap().zapret_dir.clone()
@@ -78,6 +103,17 @@ impl AppState {
     }
     fn managed_core_dir(&self, engine: &str) -> PathBuf {
         self.data_dir.lock().unwrap().join(engine)
+    }
+    /// Пускает к движкам по одному. Команды выполняются в пуле потоков и
+    /// могут прийти одновременно: человек жмёт «выключить», а сторож в этот
+    /// же миг чинит обход — и всё заканчивается тем, что обход работает
+    /// вопреки нажатой кнопке. Замок берут только команды снаружи; внутренние
+    /// помощники его не трогают, иначе получилось бы самоблокирование.
+    ///
+    /// Отравленный замок разворачиваем: паника в одной команде не повод
+    /// навсегда лишить человека управления обходом.
+    fn engine_guard(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.engine_lock.lock().unwrap_or_else(|e| e.into_inner())
     }
     /// Ядро по имени движка. Их всего два, но обращений к ним много —
     /// без этого каждое было бы отдельным match.
@@ -580,9 +616,10 @@ fn apply_system_proxy(state: &AppState, port: u16, who: &str) -> Result<String, 
     // «прежним состоянием» остаётся то, что мы сохранили в первый раз, —
     // иначе настройки пользователя потеряются навсегда.
     if !sysproxy::is_ours_any(&before) {
-        let mut cfg = state.config();
-        cfg.saved_proxy = Some(before);
-        state.set_config(cfg)?;
+        // Здесь особенно важно не потерять запись: в saved_proxy лежат
+        // настройки прокси, которые были у человека до нас, и второго
+        // шанса их узнать не будет
+        state.update_config(|cfg| cfg.saved_proxy = Some(before))?;
     }
     Ok(format!("Системный прокси направлен в {who} · 127.0.0.1:{port}"))
 }
@@ -595,9 +632,7 @@ fn clear_system_proxy(state: &AppState) -> Result<Option<String>, String> {
     }
     let saved = state.config().saved_proxy.clone();
     sysproxy::restore(saved.as_ref())?;
-    let mut cfg = state.config();
-    cfg.saved_proxy = None;
-    state.set_config(cfg)?;
+    state.update_config(|cfg| cfg.saved_proxy = None)?;
     Ok(Some(match saved {
         Some(s) if s.enabled => "Системный прокси возвращён к прежним настройкам".into(),
         _ => "Системный прокси выключен".into(),
@@ -641,9 +676,8 @@ fn start_goodbye(app: &AppHandle, state: &AppState, id: Option<String>) -> Resul
     let messages = stop_others(app, state, "goodbyedpi")?;
     state.goodbye.start(app, &state.runner, &root, p, false)?;
 
-    let mut cfg = state.config();
-    cfg.goodbye_preset = Some(p.id.clone());
-    state.set_config(cfg)?;
+    let chosen = p.id.clone();
+    state.update_config(|cfg| cfg.goodbye_preset = Some(chosen))?;
     Ok(messages)
 }
 
@@ -760,9 +794,8 @@ fn start_core(
         }
     }
 
-    let mut cfg = state.config();
-    core_cfg_mut(&mut cfg, engine).preset = Some(p.id.clone());
-    state.set_config(cfg)?;
+    let chosen = p.id.clone();
+    state.update_config(|cfg| core_cfg_mut(cfg, engine).preset = Some(chosen))?;
     Ok(messages)
 }
 
@@ -813,20 +846,27 @@ fn start_byedpi(app: &AppHandle, state: &AppState, id: Option<String>) -> Result
         ));
     }
 
-    let mut cfg = state.config();
-    cfg.byedpi_preset = Some(preset.id.clone());
-    state.set_config(cfg)?;
+    let chosen = preset.id.clone();
+    state.update_config(|cfg| cfg.byedpi_preset = Some(chosen))?;
     Ok(messages)
 }
 
 // ---------------------------------------------------------------- команды
 
-#[tauri::command]
+/// `(async)` у синхронных команд — не украшение. Tauri выполняет команды
+/// без этой пометки на главном потоке, том самом, который рисует окно.
+/// А здесь запускаются процессы Windows, ожидается порт ядра и есть явные
+/// паузы — всё это время окно не перерисовывалось бы вовсе. С пометкой
+/// команда уезжает в пул потоков, тело остаётся прежним.
+///
+/// Платой идёт то, что команды теперь могут выполняться одновременно, —
+/// поэтому фоновые записи настроек ходят через `update_config`.
+#[tauri::command(async)]
 fn snapshot(state: State<'_, AppState>) -> Snapshot {
     build_snapshot(&state)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_zapret_dir(path: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let picked = PathBuf::from(&path);
     let root = sysutil::resolve_zapret_root(&picked)
@@ -896,21 +936,25 @@ async fn do_install(app: &AppHandle, fresh: bool) -> Result<Snapshot, String> {
 
     let version = updater::install(app, &release, &target, state.install_cancel.clone()).await?;
 
-    let mut cfg = state.config();
-    cfg.zapret_dir = Some(target.clone());
-    cfg.managed = managed;
-    cfg.installed_version = Some(version);
-    cfg.onboarded = true;
-    let list = strategies::list(&target, &cfg.game_filter).unwrap_or_default();
-    if cfg.selected_strategy.is_none()
-        || !list.iter().any(|s| Some(&s.name) == cfg.selected_strategy.as_ref())
-    {
-        cfg.selected_strategy = list.first().map(|s| s.name.clone());
-    }
-    state.set_config(cfg.clone())?;
+    let filter = state.config().game_filter.clone();
+    let list = strategies::list(&target, &filter).unwrap_or_default();
+    // Установка может идти в фоне, пока человек что-то меняет в настройках,
+    // поэтому пишем под замком и возвращаем то, что в итоге выбрано
+    let selected = state.update_config(|cfg| {
+        cfg.zapret_dir = Some(target.clone());
+        cfg.managed = managed;
+        cfg.installed_version = Some(version);
+        cfg.onboarded = true;
+        if cfg.selected_strategy.is_none()
+            || !list.iter().any(|s| Some(&s.name) == cfg.selected_strategy.as_ref())
+        {
+            cfg.selected_strategy = list.first().map(|s| s.name.clone());
+        }
+        cfg.selected_strategy.clone()
+    })?;
 
     if was_running {
-        if let Some(name) = restore.or(cfg.selected_strategy.clone()) {
+        if let Some(name) = restore.or(selected) {
             if let Some(s) = strategies::find(&list, &name) {
                 let r = runner.clone();
                 let app2 = app.clone();
@@ -930,7 +974,7 @@ fn cancel_install(state: State<'_, AppState>) {
     state.install_cancel.store(true, Ordering::SeqCst);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn select_strategy(name: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let mut cfg = state.config();
     cfg.selected_strategy = Some(name);
@@ -938,8 +982,9 @@ fn select_strategy(name: String, state: State<'_, AppState>) -> Result<Snapshot,
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn start_bypass(app: AppHandle, name: Option<String>, state: State<'_, AppState>) -> Result<Snapshot, String> {
+    let _guard = state.engine_guard();
     // Что именно сделали — в журнал: тост покажет только «включено»
     let messages = start_bypass_named(&app, &state, name)?;
     for m in messages {
@@ -981,8 +1026,9 @@ fn start_zapret(app: &AppHandle, state: &AppState, name: Option<String>) -> Resu
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn stop_bypass(app: AppHandle, state: State<'_, AppState>) -> Result<Snapshot, String> {
+    let _guard = state.engine_guard();
     // Гасим всё: пользователь нажал «выключить», а не «переключить»
     for m in stop_others(&app, &state, "")? {
         state.runner.log(Some(&app), "info", m);
@@ -992,8 +1038,9 @@ fn stop_bypass(app: AppHandle, state: State<'_, AppState>) -> Result<Snapshot, S
 
 // ---------------------------------------------------------- команды ByeDPI
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_engine(app: AppHandle, engine: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     if !ENGINES.contains(&engine.as_str()) {
         return Err("неизвестный движок обхода".into());
     }
@@ -1016,7 +1063,7 @@ fn engine_name(engine: &str) -> &'static str {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_byedpi_dir(path: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let picked = PathBuf::from(&path);
     let root = byedpi::resolve_root(&picked)
@@ -1069,14 +1116,14 @@ async fn do_install_byedpi(app: &AppHandle, fresh: bool) -> Result<Snapshot, Str
 
     let version = byedpi::install(app, &release, &target, state.install_cancel.clone()).await?;
 
-    let mut cfg = state.config();
-    cfg.byedpi_dir = Some(target);
-    cfg.byedpi_managed = managed;
-    cfg.byedpi_version = Some(version);
-    if cfg.byedpi_preset.is_none() {
-        cfg.byedpi_preset = byedpi::builtin().first().map(|p| p.id.clone());
-    }
-    state.set_config(cfg)?;
+    state.update_config(|cfg| {
+        cfg.byedpi_dir = Some(target);
+        cfg.byedpi_managed = managed;
+        cfg.byedpi_version = Some(version);
+        if cfg.byedpi_preset.is_none() {
+            cfg.byedpi_preset = byedpi::builtin().first().map(|p| p.id.clone());
+        }
+    })?;
 
     if let Some(id) = was {
         let _ = start_byedpi(app, &state, Some(id));
@@ -1090,7 +1137,7 @@ fn goodbye_engine(state: &AppState) -> bool {
     state.config().engine == "goodbyedpi"
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn select_preset(id: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let engine = state.config().engine.clone();
     let mut cfg = state.config();
@@ -1117,7 +1164,7 @@ fn refuse_custom_presets(state: &AppState) -> Result<(), String> {
 }
 
 /// Создаёт или переписывает свой пресет. Пустой `id` — создаём новый.
-#[tauri::command]
+#[tauri::command(async)]
 fn save_preset(
     id: Option<String>,
     name: String,
@@ -1168,7 +1215,7 @@ fn save_preset(
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn delete_preset(id: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     refuse_custom_presets(&state)?;
     let goodbye = goodbye_engine(&state);
@@ -1199,7 +1246,7 @@ fn delete_preset(id: String, state: State<'_, AppState>) -> Result<Snapshot, Str
 
 // ------------------------------------------------------- команды GoodbyeDPI
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_goodbye_dir(path: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let root = goodbye::resolve_root(&PathBuf::from(&path))
         .ok_or("В этой папке нет x86_64\\goodbyedpi.exe — выбери папку с распакованным GoodbyeDPI")?;
@@ -1251,14 +1298,14 @@ async fn do_install_goodbye(app: &AppHandle, fresh: bool) -> Result<Snapshot, St
 
     let version = goodbye::install(app, &release, &target, state.install_cancel.clone()).await?;
 
-    let mut cfg = state.config();
-    cfg.goodbye_dir = Some(target);
-    cfg.goodbye_managed = managed;
-    cfg.goodbye_version = Some(version);
-    if cfg.goodbye_preset.is_none() {
-        cfg.goodbye_preset = goodbye::builtin().first().map(|p| p.id.clone());
-    }
-    state.set_config(cfg)?;
+    state.update_config(|cfg| {
+        cfg.goodbye_dir = Some(target);
+        cfg.goodbye_managed = managed;
+        cfg.goodbye_version = Some(version);
+        if cfg.goodbye_preset.is_none() {
+            cfg.goodbye_preset = goodbye::builtin().first().map(|p| p.id.clone());
+        }
+    })?;
 
     if let Some(id) = was {
         let _ = start_goodbye(app, &state, Some(id));
@@ -1290,7 +1337,7 @@ async fn update_goodbye_blacklist(app: AppHandle, state: State<'_, AppState>) ->
 
 // ------------------------------------------------ команды Xray и sing-box
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_core_dir(engine: String, path: String, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let spec = core_spec(&engine)?;
     let root = proxycore::resolve_root(spec, &PathBuf::from(&path)).ok_or_else(|| {
@@ -1359,15 +1406,15 @@ async fn do_install_core(app: &AppHandle, engine: &str, fresh: bool) -> Result<S
     let version = proxycore::install(spec, app, &release, &target, state.install_cancel.clone()).await?;
 
     let first = core_presets(engine).first().map(|p| p.id.clone());
-    let mut cfg = state.config();
-    let cc = core_cfg_mut(&mut cfg, engine);
-    cc.dir = Some(target);
-    cc.managed = managed;
-    cc.version = Some(version);
-    if cc.preset.is_none() {
-        cc.preset = first;
-    }
-    state.set_config(cfg)?;
+    state.update_config(|cfg| {
+        let cc = core_cfg_mut(cfg, engine);
+        cc.dir = Some(target);
+        cc.managed = managed;
+        cc.version = Some(version);
+        if cc.preset.is_none() {
+            cc.preset = first;
+        }
+    })?;
 
     if let Some(id) = was {
         let _ = start_core(app, &state, engine, Some(id));
@@ -1375,13 +1422,14 @@ async fn do_install_core(app: &AppHandle, engine: &str, fresh: bool) -> Result<S
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_core_port(
     app: AppHandle,
     engine: String,
     port: u16,
     state: State<'_, AppState>,
 ) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     let spec = core_spec(&engine)?;
     if port < 1024 {
         return Err("Порты ниже 1024 заняты системой — возьми что-нибудь от 1024".into());
@@ -1405,7 +1453,7 @@ fn set_core_port(
 
 /// Сохраняет ссылку на свой сервер. Пустая строка — забыть сервер: тогда
 /// у ядра остаётся только фрагментация.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_core_server(
     app: AppHandle,
     engine: String,
@@ -1525,13 +1573,14 @@ async fn load_subscription(
 
 /// Выбирает сервер из списка. Если ядро работает на серверном пресете,
 /// перезапускаем: конфиг читается только при старте.
-#[tauri::command]
+#[tauri::command(async)]
 fn select_server(
     app: AppHandle,
     engine: String,
     index: usize,
     state: State<'_, AppState>,
 ) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     core_spec(&engine)?;
     let mut cfg = state.config();
     let chosen = {
@@ -1579,8 +1628,9 @@ async fn ping_servers(engine: String, state: State<'_, AppState>) -> Result<Vec<
     Ok(futures_util::future::join_all(probes).await)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_byedpi_port(app: AppHandle, port: u16, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     if port < 1024 {
         return Err("Порты ниже 1024 заняты системой — возьми что-нибудь от 1024".into());
     }
@@ -1603,7 +1653,7 @@ fn set_byedpi_port(app: AppHandle, port: u16, state: State<'_, AppState>) -> Res
 /// Настройка есть у каждого локального прокси — ByeDPI, Xray, sing-box, — и у
 /// каждого она своя. Движок приходит явно: в настройках карточки показываются
 /// все сразу, и «тот, который выбран» тут не подходит.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_system_proxy(
     engine: String,
     enable: bool,
@@ -1759,19 +1809,20 @@ async fn run_preset_tests(
                     .then_with(|| b.avg_ms.unwrap_or(9999).cmp(&a.avg_ms.unwrap_or(9999)))
             })
             .map(|r| r.strategy.clone());
-        let mut cfg = state.config();
-        if core_mode {
-            let cc = core_cfg_mut(&mut cfg, &engine);
-            cc.best = best;
-            cc.last_test_at = Some(sysutil::now_iso());
-        } else if goodbye_mode {
-            cfg.goodbye_best = best;
-            cfg.goodbye_last_test_at = Some(sysutil::now_iso());
-        } else {
-            cfg.byedpi_best = best;
-            cfg.byedpi_last_test_at = Some(sysutil::now_iso());
-        }
-        let _ = state.set_config(cfg);
+        let _ = state.update_config(|cfg| {
+            let now = sysutil::now_iso();
+            if core_mode {
+                let cc = core_cfg_mut(cfg, &engine);
+                cc.best = best;
+                cc.last_test_at = Some(now);
+            } else if goodbye_mode {
+                cfg.goodbye_best = best;
+                cfg.goodbye_last_test_at = Some(now);
+            } else {
+                cfg.byedpi_best = best;
+                cfg.byedpi_last_test_at = Some(now);
+            }
+        });
     }
     result
 }
@@ -1831,10 +1882,10 @@ async fn run_tests(
                     .then_with(|| b.avg_ms.unwrap_or(9999).cmp(&a.avg_ms.unwrap_or(9999)))
             })
             .map(|r| r.strategy.clone());
-        let mut cfg = state.config();
-        cfg.best_strategy = best;
-        cfg.last_test_at = Some(sysutil::now_iso());
-        let _ = state.set_config(cfg);
+        let _ = state.update_config(|cfg| {
+            cfg.best_strategy = best;
+            cfg.last_test_at = Some(sysutil::now_iso());
+        });
     }
     result
 }
@@ -1842,7 +1893,7 @@ async fn run_tests(
 /// Сохраняет список своих сайтов. Строки, которые нельзя разобрать,
 /// не сохраняем молча — иначе человек будет ждать проверки того, чего
 /// в списке не окажется.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_custom_targets(items: Vec<String>, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let mut clean: Vec<String> = Vec::new();
     for raw in items {
@@ -1923,14 +1974,14 @@ async fn install_app_update(app: AppHandle) -> Result<String, String> {
 }
 
 /// Профиль настроек текстом — его пересылают другому человеку.
-#[tauri::command]
+#[tauri::command(async)]
 fn export_profile(state: State<'_, AppState>) -> Result<String, String> {
     profile::to_text(&state.config())
 }
 
 /// Накладывает присланный профиль. Свои папки, версии и ссылки на серверы
 /// остаются на месте: в профиле их нет и быть не должно.
-#[tauri::command]
+#[tauri::command(async)]
 fn import_profile(text: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
     let incoming = profile::parse(&text)?;
     let mut cfg = state.config();
@@ -1950,7 +2001,7 @@ fn cancel_tests(state: State<'_, AppState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn install_service(name: Option<String>, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let cfg = state.config();
     let root = cfg.zapret_dir.clone().ok_or("Папка zapret не выбрана")?;
@@ -1966,7 +2017,7 @@ fn install_service(name: Option<String>, state: State<'_, AppState>) -> Result<S
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn remove_service(state: State<'_, AppState>) -> Result<Snapshot, String> {
     service::remove()?;
     let mut cfg = state.config();
@@ -1975,7 +2026,7 @@ fn remove_service(state: State<'_, AppState>) -> Result<Snapshot, String> {
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_app_autostart(enable: bool, state: State<'_, AppState>) -> Result<Snapshot, String> {
     service::set_autostart(enable)?;
     let mut cfg = state.config();
@@ -1984,7 +2035,7 @@ fn set_app_autostart(enable: bool, state: State<'_, AppState>) -> Result<Snapsho
     Ok(build_snapshot(&state))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_option(key: String, value: serde_json::Value, state: State<'_, AppState>) -> Result<Snapshot, String> {
     let cfg = state.config();
     let mut raw = serde_json::to_value(&cfg).map_err(|e| e.to_string())?;
@@ -2031,8 +2082,9 @@ async fn diagnostics(state: State<'_, AppState>) -> Result<Vec<diag::Check>, Str
 
 /// Гасит движки, которые работают вопреки выбору, — обычно остаток от
 /// прошлого запуска приложения.
-#[tauri::command]
+#[tauri::command(async)]
 fn stop_stray(app: AppHandle, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     let engine = state.config().engine.clone();
     let mut messages = stop_others(&app, &state, &engine)?;
     if messages.is_empty() {
@@ -2044,13 +2096,13 @@ fn stop_stray(app: AppHandle, state: State<'_, AppState>) -> Result<ActionResult
     Ok(ActionResult { snapshot: build_snapshot(&state), messages })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn warp_connect(state: State<'_, AppState>) -> Result<ActionResult, String> {
     let message = warp::connect()?;
     Ok(ActionResult { snapshot: build_snapshot(&state), messages: vec![message] })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn warp_disconnect(state: State<'_, AppState>) -> Result<ActionResult, String> {
     let message = warp::disconnect()?;
     Ok(ActionResult { snapshot: build_snapshot(&state), messages: vec![message] })
@@ -2066,7 +2118,7 @@ async fn warp_check() -> warp::WarpProbe {
 
 /// Открывает страницу в браузере. Список закрытый: адреса приходят из
 /// интерфейса, но проверить их всё равно дешевле, чем доверять.
-#[tauri::command]
+#[tauri::command(async)]
 fn open_url(url: String) -> Result<(), String> {
     const ALLOWED: [&str; 4] = [
         warp::DOWNLOAD_URL,
@@ -2094,12 +2146,13 @@ pub struct ActionResult {
 
 /// Останавливает чужие обходы, найденные диагностикой, — чтобы не искать их
 /// по системе руками.
-#[tauri::command]
+#[tauri::command(async)]
 fn stop_conflicts(
     app: AppHandle,
     items: Option<Vec<diag::ConflictItem>>,
     state: State<'_, AppState>,
 ) -> Result<ActionResult, String> {
+    let _guard = state.engine_guard();
     let own = state.own_processes();
     let items = items.unwrap_or_else(|| diag::scan_conflicts(&own));
     if items.is_empty() {
@@ -2129,7 +2182,7 @@ fn stop_conflicts(
 
 /// Игровой фильтр меняет диапазон портов в аргументах winws — после смены
 /// обход надо перезапустить, иначе настройка не применится.
-#[tauri::command]
+#[tauri::command(async)]
 fn set_game_filter(app: AppHandle, mode: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
     if !["off", "all", "tcp", "udp"].contains(&mode.as_str()) {
         return Err("неизвестный режим игрового фильтра".into());
@@ -2156,7 +2209,7 @@ fn set_game_filter(app: AppHandle, mode: String, state: State<'_, AppState>) -> 
     Ok(ActionResult { snapshot: build_snapshot(&state), messages })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_ipset_mode(app: AppHandle, mode: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
     let root = state.root().ok_or("Папка zapret не выбрана")?;
     tools::set_ipset_mode(&root, &mode)?;
@@ -2182,7 +2235,7 @@ async fn update_ipset(app: AppHandle, state: State<'_, AppState>) -> Result<Acti
     Ok(ActionResult { snapshot: build_snapshot(&state), messages })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn set_active_fake(
     app: AppHandle,
     kind: String,
@@ -2198,7 +2251,7 @@ fn set_active_fake(
     Ok(ActionResult { snapshot: build_snapshot(&state), messages })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn clear_discord_cache(app: AppHandle, state: State<'_, AppState>) -> ActionResult {
     let messages = tools::clear_discord_cache();
     for m in &messages {
@@ -2220,7 +2273,7 @@ async fn apply_hosts() -> Result<String, String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn open_folder(state: State<'_, AppState>) -> Result<(), String> {
     let root = state.root().ok_or("Папка не выбрана")?;
     std::process::Command::new("explorer")
@@ -2527,6 +2580,9 @@ async fn watchdog_round(app: &AppHandle) {
     let engine_name = engine_name(&engine);
     std::thread::spawn(move || {
         let state = handle.state::<AppState>();
+        // Если человек прямо сейчас сам переключает движок, чинить поверх
+        // него нельзя — дожидаемся своей очереди
+        let _guard = state.engine_guard();
         let outcome = match &switch_to {
             Some(id) => start_bypass_named(&handle, &state, Some(id.clone()))
                 .map(|_| format!("Сторож переключил {engine_name} на «{id}»")),
@@ -2597,9 +2653,9 @@ fn spawn_update_watcher(app: AppHandle) {
                 // не должен повторяться каждые 15 минут и добивать лимит
                 {
                     let state = app.state::<AppState>();
-                    let mut cfg = state.config();
-                    cfg.last_update_check = Some(sysutil::now_iso());
-                    let _ = state.set_config(cfg);
+                    let _ = state.update_config(|cfg| {
+                        cfg.last_update_check = Some(sysutil::now_iso())
+                    });
                 }
                 background_check(&app).await;
                 background_check_byedpi(&app).await;
@@ -2731,6 +2787,7 @@ pub fn run() {
                 install_cancel: Arc::new(AtomicBool::new(false)),
                 testing: Arc::new(AtomicBool::new(false)),
                 watchdog_fails: Arc::new(AtomicUsize::new(0)),
+                engine_lock: Mutex::new(()),
             });
 
             setup_tray(&handle)?;

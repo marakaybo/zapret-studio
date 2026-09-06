@@ -13,6 +13,8 @@
 use crate::sysutil::{out_text, run_hidden};
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 const DEFAULT_PATH: &str = r"C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe";
 
@@ -62,7 +64,30 @@ fn run(args: &[&str]) -> Result<String, String> {
     }
 }
 
+/// `warp-cli` отвечает не мгновенно — два запуска процесса на каждый вызов, —
+/// а состояние спрашивается при сборке каждого снимка, то есть после любого
+/// действия пользователя. Держим его пару секунд и сбрасываем сами, когда
+/// сами же меняем состояние: тогда кэш ни разу не соврёт про наши действия.
+static CACHE: Mutex<Option<(Instant, WarpState)>> = Mutex::new(None);
+const CACHE_TTL: Duration = Duration::from_secs(3);
+
+/// Забыть запомненное состояние — после connect и disconnect.
+pub fn forget() {
+    *CACHE.lock().unwrap() = None;
+}
+
 pub fn status() -> WarpState {
+    if let Some((at, state)) = CACHE.lock().unwrap().as_ref() {
+        if at.elapsed() < CACHE_TTL {
+            return state.clone();
+        }
+    }
+    let fresh = read_status();
+    *CACHE.lock().unwrap() = Some((Instant::now(), fresh.clone()));
+    fresh
+}
+
+fn read_status() -> WarpState {
     // Программы нет — но карточку в интерфейсе всё равно показываем, иначе
     // «а где у меня WARP?» превращается в загадку без ответа
     let Some(_) = cli() else {
@@ -102,11 +127,13 @@ pub fn status() -> WarpState {
 
 pub fn connect() -> Result<String, String> {
     run(&["connect"])?;
+    forget();
     Ok("WARP подключается — на это уходит пара секунд".into())
 }
 
 pub fn disconnect() -> Result<String, String> {
     run(&["disconnect"])?;
+    forget();
     Ok("WARP отключён".into())
 }
 
@@ -208,6 +235,21 @@ mod tests {
         assert!(!s.detail.contains("Status update"), "в detail попал сырой префикс: {}", s.detail);
         // «Connected» и флаг должны согласовываться между собой
         assert_eq!(s.connected, s.detail.starts_with("Connected"), "{}", s.detail);
+    }
+
+    /// Кэш не должен переживать наши же действия: после connect и disconnect
+    /// приложение обязано показать новое состояние сразу, а не через три
+    /// секунды.
+    #[test]
+    fn forgetting_the_cache_forces_a_fresh_read() {
+        let first = status();
+        // Второй вызов подряд обязан прийти из кэша — иначе смысла нет
+        let cached = CACHE.lock().unwrap().clone();
+        assert!(cached.is_some(), "состояние должно запоминаться");
+        assert_eq!(status().installed, first.installed);
+
+        forget();
+        assert!(CACHE.lock().unwrap().is_none(), "forget обязан очищать кэш");
     }
 
     /// Ответ Cloudflare разбираем построчно — проверяем на настоящем виде.
