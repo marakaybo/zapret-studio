@@ -668,7 +668,8 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 13px;
   padding: 12px;
-  height: calc(100vh - 210px);
+  /* Шапка приложения плюс заголовок экрана: остальное отдаём журналу */
+  height: calc(100vh - 190px);
   overflow-y: auto;
   user-select: text;
 }
@@ -1162,4 +1163,38 @@ textarea.input {
   color: var(--dim);
   white-space: nowrap;
   flex: none;
+}
+
+/* Разделы настроек. Раньше здесь была лента из четырнадцати карточек:
+   чтобы дойти до диагностики, приходилось проматывать все движки. */
+.section-nav {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+
+.section-nav button {
+  position: relative;
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: var(--fs-md);
+  color: var(--muted);
+  transition: color 0.16s;
+}
+
+.section-nav button.on {
+  color: #fff;
+  font-weight: 600;
+}
+
+.section-nav .section-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: var(--accent-solid);
 }

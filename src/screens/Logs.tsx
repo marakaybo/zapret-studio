@@ -22,7 +22,9 @@ export default function Logs({ logs, onClear }: { logs: LogLine[]; onClear: () =
       <div className="head row">
         <div style={{ flex: 1 }}>
           <h1>Журнал</h1>
-          <p className="sub">Что говорит winws.exe. Сюда же попадают ошибки запуска.</p>
+          <p className="sub">
+            Что говорят сами движки обхода. Сюда же попадают ошибки запуска и записи сторожа.
+          </p>
         </div>
         <button className="btn sm ghost" onClick={() => navigator.clipboard.writeText(logs.map((l) => `${l.time} ${l.text}`).join("\n"))}>
           Скопировать
@@ -33,7 +35,9 @@ export default function Logs({ logs, onClear }: { logs: LogLine[]; onClear: () =
       </div>
 
       <div className="logbox" ref={box} onScroll={onScroll}>
-        {logs.length === 0 && <div style={{ color: "var(--dim)" }}>Пока пусто — включи обход, и здесь появятся строки.</div>}
+        {logs.length === 0 && (
+          <div style={{ color: "var(--dim)" }}>Пока пусто — включи обход, и здесь появятся строки.</div>
+        )}
         {logs.map((l, i) => (
           <motion.div
             key={i}

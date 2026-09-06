@@ -26,6 +26,17 @@ function Row({ title, desc, children }: { title: string; desc: string; children:
   );
 }
 
+/** Четырнадцать карточек подряд читались как бесконечная лента: чтобы
+ *  добраться до диагностики, приходилось проматывать все движки. Разложены
+ *  по трём разделам — внутри каждого не больше шести карточек. */
+type Section = "engines" | "app" | "system";
+
+const SECTIONS: { id: Section; label: string }[] = [
+  { id: "engines", label: "Движки" },
+  { id: "app", label: "Приложение" },
+  { id: "system", label: "Система" },
+];
+
 /** Xray и sing-box настраиваются одинаково, поэтому карточка у них общая. */
 function CoreCard({
   engine,
@@ -307,6 +318,7 @@ export default function Settings({
   const [hosts, setHosts] = useState<HostsStatus | null>(null);
   const [hostsBusy, setHostsBusy] = useState(false);
   const [port, setPort] = useState(String(bye.port));
+  const [section, setSection] = useState<Section>("engines");
   const [repo, setRepo] = useState(snap.appRepo);
   const [mine, setMine] = useState<string | null>(null);
   const [theirs, setTheirs] = useState("");
@@ -346,10 +358,280 @@ export default function Settings({
     <div className="screen">
       <div className="head">
         <h1>Настройки</h1>
-        <p className="sub">Источник сборки, обновления, автозапуск, инструменты zapret и диагностика.</p>
+        <p className="sub">
+          {section === "engines"
+            ? "Чем обходить блокировки и откуда брать сами программы обхода."
+            : section === "app"
+              ? "Обновления самой Studio, автозапуск, сторож и профиль настроек."
+              : "Инструменты сборки zapret, Cloudflare WARP и диагностика системы."}
+        </p>
+      </div>
+
+      <div className="section-nav">
+        {SECTIONS.map((x) => (
+          <button
+            key={x.id}
+            className={section === x.id ? "on" : ""}
+            onClick={() => setSection(x.id)}
+          >
+            {section === x.id && (
+              <motion.span
+                layoutId="settings-section"
+                className="section-bg"
+                transition={{ type: "spring", stiffness: 480, damping: 38 }}
+              />
+            )}
+            <span style={{ position: "relative" }}>{x.label}</span>
+          </button>
+        ))}
       </div>
 
       <div className="stack">
+        {section === "engines" && <>
+        <div className="card">
+          <h2 style={{ marginBottom: 4 }}>Движок обхода</h2>
+          <Row
+            title="Чем обходить блокировки"
+            desc="Что включает большая кнопка на главной. Одновременно работает только один; что когда выбирать — на вкладке «Советы»"
+          >
+            <EnginePicker
+              id="engine-settings"
+              value={snap.engine}
+              onChange={onEngine}
+              disabled={busy}
+              options={ENGINES.map((e) => ({ value: e.id as Engine, label: e.label, title: e.when }))}
+            />
+          </Row>
+        </div>
+
+        <div className="card">
+          <h2 style={{ marginBottom: 4 }}>Сборка zapret</h2>
+          <Row
+            title={cfg.managed ? "Папкой управляет приложение" : "Подключена твоя папка"}
+            desc={cfg.zapretDir ?? "не выбрана"}
+          >
+            <button className="btn sm ghost" onClick={onOpenFolder}>
+              <Folder /> Открыть
+            </button>
+            <button className="btn sm" onClick={onPickFolder} disabled={busy}>
+              Выбрать другую
+            </button>
+          </Row>
+          {!cfg.managed && (
+            <Row
+              title="Перейти на свою папку приложения"
+              desc="Скачаю свежий релиз в служебную папку и буду обновлять его сам"
+            >
+              <button className="btn sm" onClick={onInstallFresh} disabled={busy}>
+                {busy ? <Spinner /> : <Download />} Скачать
+              </button>
+            </Row>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="row" style={{ marginBottom: 4 }}>
+            <h2 style={{ flex: 1 }}>ByeDPI</h2>
+            <span className="sub" style={{ fontSize: 12 }}>
+              {snap.engine === "byedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
+            </span>
+          </div>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
+            Локальный SOCKS5-прокси вместо драйвера: ломает запросы по дороге к серверу.
+            Прав администратора не требует и WinDivert не занимает, но заворачивает только TCP тех
+            приложений, что читают системный прокси, — голос Discord и игры остаются за zapret.
+          </p>
+
+          {bye.installed ? (
+            <>
+              <Row
+                title={bye.managed ? "Файлом управляет приложение" : "Подключена твоя папка"}
+                desc={bye.dir ?? "не выбрана"}
+              >
+                <button className="btn sm ghost" onClick={onPickByedpiFolder} disabled={busy}>
+                  <Folder /> Выбрать другую
+                </button>
+              </Row>
+              <Row
+                title={`Установлена версия ${bye.version ?? "неизвестна"}`}
+                desc={
+                  byeUpdate?.error
+                    ? `Не удалось проверить: ${byeUpdate.error}`
+                    : byeUpdate?.latest
+                      ? byeUpdate.hasUpdate
+                        ? `На GitHub уже ${byeUpdate.latest} от ${byeUpdate.release?.publishedAt ?? ""}`
+                        : "Это последняя версия"
+                      : "Беру релизы из hufrea/byedpi"
+                }
+              >
+                <button className="btn sm ghost" onClick={onCheckByedpiUpdate} disabled={byeChecking}>
+                  {byeChecking ? <Spinner /> : <Refresh />} Проверить
+                </button>
+                {byeUpdate?.hasUpdate && (
+                  <button className="btn sm primary" onClick={onUpdateByedpi} disabled={busy}>
+                    {busy ? <Spinner /> : <Download />} Обновить
+                  </button>
+                )}
+              </Row>
+              <Row
+                title="Заворачивать трафик автоматически"
+                desc={
+                  bye.systemProxyActive
+                    ? "Системный прокси Windows сейчас направлен в ByeDPI"
+                    : "Пропишу ByeDPI в системные настройки прокси при запуске обхода и уберу оттуда при остановке"
+                }
+              >
+                <Switch on={bye.systemProxy} onChange={onSystemProxy} disabled={busy} />
+              </Row>
+              <Row
+                title="Порт прокси"
+                desc={`ByeDPI слушает 127.0.0.1:${bye.port}. Меняй, если порт уже кем-то занят`}
+              >
+                <input
+                  className="input"
+                  style={{ width: 92 }}
+                  inputMode="numeric"
+                  value={port}
+                  onChange={(e) => setPort(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                />
+                <button
+                  className="btn sm"
+                  disabled={busy || Number(port) === bye.port || !Number(port)}
+                  onClick={() => onByedpiPort(Number(port))}
+                >
+                  Применить
+                </button>
+              </Row>
+              <Row
+                title="Включать ByeDPI при запуске приложения"
+                desc="Своей службы у ByeDPI нет: прокси поднимается вместе с окном. Вместе с автозапуском приложения это даёт обход сразу после входа в Windows"
+              >
+                <Switch
+                  on={cfg.byedpiAutostart}
+                  onChange={(v) => onOption("byedpiAutostart", v)}
+                  disabled={busy}
+                />
+              </Row>
+            </>
+          ) : (
+            <Row
+              title="ByeDPI не установлен"
+              desc="Скачаю последний релиз с GitHub — это один файл ciadpi.exe. Или укажи папку, если он уже есть"
+            >
+              <button className="btn sm ghost" onClick={onPickByedpiFolder} disabled={busy}>
+                <Folder /> Указать папку
+              </button>
+              <button className="btn sm primary" onClick={onInstallByedpi} disabled={busy}>
+                {busy ? <Spinner /> : <Globe />} Скачать
+              </button>
+            </Row>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="row" style={{ marginBottom: 4 }}>
+            <h2 style={{ flex: 1 }}>GoodbyeDPI</h2>
+            <span className="sub" style={{ fontSize: 12 }}>
+              {snap.engine === "goodbyedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
+            </span>
+          </div>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
+            Тот же драйвер WinDivert, что у zapret, но настраивается ключами запуска: режимы
+            −1…−9 плюс списки заблокированных доменов. Работает от администратора и не может
+            быть включён одновременно с zapret.
+          </p>
+
+          {gdpi.installed ? (
+            <>
+              <Row
+                title={gdpi.managed ? "Папкой управляет приложение" : "Подключена твоя папка"}
+                desc={gdpi.dir ?? "не выбрана"}
+              >
+                <button className="btn sm ghost" onClick={onPickGoodbyeFolder} disabled={busy}>
+                  <Folder /> Выбрать другую
+                </button>
+              </Row>
+              <Row
+                title={`Установлена версия ${gdpi.version ?? "неизвестна"}`}
+                desc={
+                  gdpiUpdate?.error
+                    ? `Не удалось проверить: ${gdpiUpdate.error}`
+                    : gdpiUpdate?.latest
+                      ? gdpiUpdate.hasUpdate
+                        ? `На GitHub уже ${gdpiUpdate.latest} от ${gdpiUpdate.release?.publishedAt ?? ""}`
+                        : "Это последняя версия"
+                      : "Беру самый свежий релиз из ValdikSS/GoodbyeDPI, включая предрелизы: стабильный там не обновлялся с 2022 года"
+                }
+              >
+                <button className="btn sm ghost" onClick={onCheckGoodbyeUpdate} disabled={gdpiChecking}>
+                  {gdpiChecking ? <Spinner /> : <Refresh />} Проверить
+                </button>
+                {gdpiUpdate?.hasUpdate && (
+                  <button className="btn sm primary" onClick={onUpdateGoodbye} disabled={busy}>
+                    {busy ? <Spinner /> : <Download />} Обновить
+                  </button>
+                )}
+              </Row>
+              <Row
+                title="Список заблокированного"
+                desc={
+                  gdpi.blacklist != null
+                    ? `В russia-blacklist.txt ${gdpi.blacklist} доменов. Обновляю из того же источника, что и сам GoodbyeDPI`
+                    : "Файла russia-blacklist.txt нет — пресеты «Россия» работать не будут"
+                }
+              >
+                <button className="btn sm" onClick={onUpdateBlacklist} disabled={busy}>
+                  {busy ? <Spinner /> : <Refresh />} Обновить
+                </button>
+              </Row>
+              <Row
+                title="Включать GoodbyeDPI при запуске приложения"
+                desc="Своей службы приложение для него не ставит: обход поднимается вместе с окном. Вместе с автозапуском приложения это даёт обход сразу после входа в Windows"
+              >
+                <Switch
+                  on={cfg.goodbyeAutostart}
+                  onChange={(v) => onOption("goodbyeAutostart", v)}
+                  disabled={busy}
+                />
+              </Row>
+            </>
+          ) : (
+            <Row
+              title="GoodbyeDPI не установлен"
+              desc="Скачаю последнюю сборку с GitHub вместе с драйвером и списками доменов. Или укажи папку, если она уже есть"
+            >
+              <button className="btn sm ghost" onClick={onPickGoodbyeFolder} disabled={busy}>
+                <Folder /> Указать папку
+              </button>
+              <button className="btn sm primary" onClick={onInstallGoodbye} disabled={busy}>
+                {busy ? <Spinner /> : <Shield />} Скачать
+              </button>
+            </Row>
+          )}
+        </div>
+
+        {(["xray", "singbox"] as Core[]).map((id) => (
+          <CoreCard
+            key={id}
+            engine={id}
+            state={snap[id]}
+            update={coreUpdate[id]}
+            checking={coreChecking[id]}
+            busy={busy}
+            active={snap.engine === id}
+            onInstall={() => onCoreInstall(id)}
+            onUpdate={() => onCoreUpdate(id)}
+            onPick={() => onCorePick(id)}
+            onCheck={() => onCoreCheck(id)}
+            onPort={(p) => onCorePort(id, p)}
+            onServer={(url) => onCoreServer(id, url)}
+            onSystemProxy={(on) => onCoreSystemProxy(id, on)}
+            onAutostart={(on) => onOption(id, { ...cfg[id], autostart: on })}
+          />
+        ))}
+</>}
+
+        {section === "app" && <>
         <div className="card">
           <div className="row" style={{ marginBottom: 4 }}>
             <span style={{ color: "var(--accent-2)", display: "flex", fontSize: 17 }}>
@@ -410,101 +692,6 @@ export default function Settings({
               Применить
             </button>
           </Row>
-        </div>
-
-        <div className="card">
-          <h2 style={{ marginBottom: 4 }}>Профиль настроек</h2>
-          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
-            Подобранную стратегию можно передать другому человеку: у одного провайдера обычно
-            работает одно и то же, а подбирать заново — полчаса. Внутри только выбор — движок,
-            пресеты, порты, свои сайты для проверки. Ссылок на серверы там нет: в них твои uuid
-            и пароли, а профиль улетает в переписку навсегда.
-          </p>
-
-          <Row
-            title="Мой профиль"
-            desc={mine ? "Скопируй и отправь — вставляется в поле ниже" : "Соберу текст, который можно переслать"}
-          >
-            <button
-              className="btn sm"
-              onClick={async () => setMine(await onExportProfile())}
-              disabled={busy}
-            >
-              <Link /> {mine ? "Обновить" : "Показать"}
-            </button>
-            {mine && (
-              <button className="btn sm ghost" onClick={() => setMine(null)}>
-                Скрыть
-              </button>
-            )}
-          </Row>
-          {mine && (
-            <textarea
-              className="input mono"
-              readOnly
-              rows={7}
-              spellCheck={false}
-              value={mine}
-              onFocus={(e) => e.currentTarget.select()}
-              style={{ marginBottom: 10, fontSize: 11, userSelect: "text" }}
-            />
-          )}
-
-          <div className="setting" style={{ flexDirection: "column", alignItems: "stretch" }}>
-            <div className="txt">
-              <div className="t">Применить чужой</div>
-              <div className="d">
-                Вставь профиль, который прислали. Твои папки, версии и свои серверы останутся
-                на месте — заменится только выбор
-              </div>
-            </div>
-            <div className="server-row">
-              <textarea
-                className="input mono"
-                rows={3}
-                spellCheck={false}
-                placeholder='{"version":1,"engine":"zapret", …}'
-                value={theirs}
-                onChange={(e) => setTheirs(e.target.value)}
-                style={{ flex: 1, fontSize: 11 }}
-              />
-              <button
-                className="btn sm primary"
-                disabled={busy || !theirs.trim()}
-                onClick={() => {
-                  onImportProfile(theirs.trim());
-                  setTheirs("");
-                }}
-              >
-                {busy ? <Spinner /> : null} Применить
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <h2 style={{ marginBottom: 4 }}>Сборка zapret</h2>
-          <Row
-            title={cfg.managed ? "Папкой управляет приложение" : "Подключена твоя папка"}
-            desc={cfg.zapretDir ?? "не выбрана"}
-          >
-            <button className="btn sm ghost" onClick={onOpenFolder}>
-              <Folder /> Открыть
-            </button>
-            <button className="btn sm" onClick={onPickFolder} disabled={busy}>
-              Выбрать другую
-            </button>
-          </Row>
-          {!cfg.managed && (
-            <Row
-              title="Перейти на свою папку приложения"
-              desc="Скачаю свежий релиз в служебную папку и буду обновлять его сам"
-            >
-              <button className="btn sm" onClick={onInstallFresh} disabled={busy}>
-                {busy ? <Spinner /> : <Download />} Скачать
-              </button>
-            </Row>
-          )}
         </div>
 
         <div className="card">
@@ -620,222 +807,87 @@ export default function Settings({
         </div>
 
         <div className="card">
-          <h2 style={{ marginBottom: 4 }}>Движок обхода</h2>
+          <h2 style={{ marginBottom: 4 }}>Профиль настроек</h2>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
+            Подобранную стратегию можно передать другому человеку: у одного провайдера обычно
+            работает одно и то же, а подбирать заново — полчаса. Внутри только выбор — движок,
+            пресеты, порты, свои сайты для проверки. Ссылок на серверы там нет: в них твои uuid
+            и пароли, а профиль улетает в переписку навсегда.
+          </p>
+
           <Row
-            title="Чем обходить блокировки"
-            desc="Что включает большая кнопка на главной. Одновременно работает только один — иначе они мешают друг другу, а zapret с GoodbyeDPI ещё и делят драйвер. Что когда выбирать — на вкладке «Советы»"
+            title="Мой профиль"
+            desc={mine ? "Скопируй и отправь — вставляется в поле ниже" : "Соберу текст, который можно переслать"}
           >
-            <EnginePicker
-              id="engine-settings"
-              value={snap.engine}
-              onChange={onEngine}
+            <button
+              className="btn sm"
+              onClick={async () => setMine(await onExportProfile())}
               disabled={busy}
-              options={ENGINES.map((e) => ({ value: e.id as Engine, label: e.label, title: e.when }))}
-            />
+            >
+              <Link /> {mine ? "Обновить" : "Показать"}
+            </button>
+            {mine && (
+              <button className="btn sm ghost" onClick={() => setMine(null)}>
+                Скрыть
+              </button>
+            )}
           </Row>
-        </div>
-
-        {(["xray", "singbox"] as Core[]).map((id) => (
-          <CoreCard
-            key={id}
-            engine={id}
-            state={snap[id]}
-            update={coreUpdate[id]}
-            checking={coreChecking[id]}
-            busy={busy}
-            active={snap.engine === id}
-            onInstall={() => onCoreInstall(id)}
-            onUpdate={() => onCoreUpdate(id)}
-            onPick={() => onCorePick(id)}
-            onCheck={() => onCoreCheck(id)}
-            onPort={(p) => onCorePort(id, p)}
-            onServer={(url) => onCoreServer(id, url)}
-            onSystemProxy={(on) => onCoreSystemProxy(id, on)}
-            onAutostart={(on) => onOption(id, { ...cfg[id], autostart: on })}
-          />
-        ))}
-
-        <div className="card">
-          <div className="row" style={{ marginBottom: 4 }}>
-            <h2 style={{ flex: 1 }}>GoodbyeDPI</h2>
-            <span className="sub" style={{ fontSize: 12 }}>
-              {snap.engine === "goodbyedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
-            </span>
-          </div>
-          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
-            Тот же драйвер WinDivert, что у zapret, но настраивается ключами запуска: режимы
-            −1…−9 плюс списки заблокированных доменов. Работает от администратора и не может
-            быть включён одновременно с zapret.
-          </p>
-
-          {gdpi.installed ? (
-            <>
-              <Row
-                title={gdpi.managed ? "Папкой управляет приложение" : "Подключена твоя папка"}
-                desc={gdpi.dir ?? "не выбрана"}
-              >
-                <button className="btn sm ghost" onClick={onPickGoodbyeFolder} disabled={busy}>
-                  <Folder /> Выбрать другую
-                </button>
-              </Row>
-              <Row
-                title={`Установлена версия ${gdpi.version ?? "неизвестна"}`}
-                desc={
-                  gdpiUpdate?.error
-                    ? `Не удалось проверить: ${gdpiUpdate.error}`
-                    : gdpiUpdate?.latest
-                      ? gdpiUpdate.hasUpdate
-                        ? `На GitHub уже ${gdpiUpdate.latest} от ${gdpiUpdate.release?.publishedAt ?? ""}`
-                        : "Это последняя версия"
-                      : "Беру самый свежий релиз из ValdikSS/GoodbyeDPI, включая предрелизы: стабильный там не обновлялся с 2022 года"
-                }
-              >
-                <button className="btn sm ghost" onClick={onCheckGoodbyeUpdate} disabled={gdpiChecking}>
-                  {gdpiChecking ? <Spinner /> : <Refresh />} Проверить
-                </button>
-                {gdpiUpdate?.hasUpdate && (
-                  <button className="btn sm primary" onClick={onUpdateGoodbye} disabled={busy}>
-                    {busy ? <Spinner /> : <Download />} Обновить
-                  </button>
-                )}
-              </Row>
-              <Row
-                title="Список заблокированного"
-                desc={
-                  gdpi.blacklist != null
-                    ? `В russia-blacklist.txt ${gdpi.blacklist} доменов. Обновляю из того же источника, что и сам GoodbyeDPI`
-                    : "Файла russia-blacklist.txt нет — пресеты «Россия» работать не будут"
-                }
-              >
-                <button className="btn sm" onClick={onUpdateBlacklist} disabled={busy}>
-                  {busy ? <Spinner /> : <Refresh />} Обновить
-                </button>
-              </Row>
-              <Row
-                title="Включать GoodbyeDPI при запуске приложения"
-                desc="Своей службы приложение для него не ставит: обход поднимается вместе с окном. Вместе с автозапуском приложения это даёт обход сразу после входа в Windows"
-              >
-                <Switch
-                  on={cfg.goodbyeAutostart}
-                  onChange={(v) => onOption("goodbyeAutostart", v)}
-                  disabled={busy}
-                />
-              </Row>
-            </>
-          ) : (
-            <Row
-              title="GoodbyeDPI не установлен"
-              desc="Скачаю последнюю сборку с GitHub вместе с драйвером и списками доменов. Или укажи папку, если она уже есть"
-            >
-              <button className="btn sm ghost" onClick={onPickGoodbyeFolder} disabled={busy}>
-                <Folder /> Указать папку
-              </button>
-              <button className="btn sm primary" onClick={onInstallGoodbye} disabled={busy}>
-                {busy ? <Spinner /> : <Shield />} Скачать
-              </button>
-            </Row>
+          {mine && (
+            <textarea
+              className="input mono"
+              readOnly
+              rows={7}
+              spellCheck={false}
+              value={mine}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ marginBottom: 10, fontSize: 11, userSelect: "text" }}
+            />
           )}
-        </div>
 
-        <div className="card">
-          <div className="row" style={{ marginBottom: 4 }}>
-            <h2 style={{ flex: 1 }}>ByeDPI</h2>
-            <span className="sub" style={{ fontSize: 12 }}>
-              {snap.engine === "byedpi" ? "сейчас работает этот движок" : "запасной движок обхода"}
-            </span>
+          <div className="setting" style={{ flexDirection: "column", alignItems: "stretch" }}>
+            <div className="txt">
+              <div className="t">Применить чужой</div>
+              <div className="d">
+                Вставь профиль, который прислали. Твои папки, версии и свои серверы останутся
+                на месте — заменится только выбор
+              </div>
+            </div>
+            <div className="server-row">
+              <textarea
+                className="input mono"
+                rows={3}
+                spellCheck={false}
+                placeholder='{"version":1,"engine":"zapret", …}'
+                value={theirs}
+                onChange={(e) => setTheirs(e.target.value)}
+                style={{ flex: 1, fontSize: 11 }}
+              />
+              <button
+                className="btn sm primary"
+                disabled={busy || !theirs.trim()}
+                onClick={() => {
+                  onImportProfile(theirs.trim());
+                  setTheirs("");
+                }}
+              >
+                {busy ? <Spinner /> : null} Применить
+              </button>
+            </div>
           </div>
-          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
-            Локальный SOCKS5-прокси вместо драйвера: ломает запросы по дороге к серверу.
-            Прав администратора не требует и WinDivert не занимает, но заворачивает только TCP тех
-            приложений, что читают системный прокси, — голос Discord и игры остаются за zapret.
-          </p>
-
-          {bye.installed ? (
-            <>
-              <Row
-                title={bye.managed ? "Файлом управляет приложение" : "Подключена твоя папка"}
-                desc={bye.dir ?? "не выбрана"}
-              >
-                <button className="btn sm ghost" onClick={onPickByedpiFolder} disabled={busy}>
-                  <Folder /> Выбрать другую
-                </button>
-              </Row>
-              <Row
-                title={`Установлена версия ${bye.version ?? "неизвестна"}`}
-                desc={
-                  byeUpdate?.error
-                    ? `Не удалось проверить: ${byeUpdate.error}`
-                    : byeUpdate?.latest
-                      ? byeUpdate.hasUpdate
-                        ? `На GitHub уже ${byeUpdate.latest} от ${byeUpdate.release?.publishedAt ?? ""}`
-                        : "Это последняя версия"
-                      : "Беру релизы из hufrea/byedpi"
-                }
-              >
-                <button className="btn sm ghost" onClick={onCheckByedpiUpdate} disabled={byeChecking}>
-                  {byeChecking ? <Spinner /> : <Refresh />} Проверить
-                </button>
-                {byeUpdate?.hasUpdate && (
-                  <button className="btn sm primary" onClick={onUpdateByedpi} disabled={busy}>
-                    {busy ? <Spinner /> : <Download />} Обновить
-                  </button>
-                )}
-              </Row>
-              <Row
-                title="Заворачивать трафик автоматически"
-                desc={
-                  bye.systemProxyActive
-                    ? "Системный прокси Windows сейчас направлен в ByeDPI"
-                    : "Пропишу ByeDPI в системные настройки прокси при запуске обхода и уберу оттуда при остановке"
-                }
-              >
-                <Switch on={bye.systemProxy} onChange={onSystemProxy} disabled={busy} />
-              </Row>
-              <Row
-                title="Порт прокси"
-                desc={`ByeDPI слушает 127.0.0.1:${bye.port}. Меняй, если порт уже кем-то занят`}
-              >
-                <input
-                  className="input"
-                  style={{ width: 92 }}
-                  inputMode="numeric"
-                  value={port}
-                  onChange={(e) => setPort(e.target.value.replace(/\D/g, "").slice(0, 5))}
-                />
-                <button
-                  className="btn sm"
-                  disabled={busy || Number(port) === bye.port || !Number(port)}
-                  onClick={() => onByedpiPort(Number(port))}
-                >
-                  Применить
-                </button>
-              </Row>
-              <Row
-                title="Включать ByeDPI при запуске приложения"
-                desc="Своей службы у ByeDPI нет: прокси поднимается вместе с окном. Вместе с автозапуском приложения это даёт обход сразу после входа в Windows"
-              >
-                <Switch
-                  on={cfg.byedpiAutostart}
-                  onChange={(v) => onOption("byedpiAutostart", v)}
-                  disabled={busy}
-                />
-              </Row>
-            </>
-          ) : (
-            <Row
-              title="ByeDPI не установлен"
-              desc="Скачаю последний релиз с GitHub — это один файл ciadpi.exe. Или укажи папку, если он уже есть"
-            >
-              <button className="btn sm ghost" onClick={onPickByedpiFolder} disabled={busy}>
-                <Folder /> Указать папку
-              </button>
-              <button className="btn sm primary" onClick={onInstallByedpi} disabled={busy}>
-                {busy ? <Spinner /> : <Globe />} Скачать
-              </button>
-            </Row>
-          )}
         </div>
 
+        <div className="card" style={{ color: "var(--dim)", fontSize: 12 }}>
+          Zapret Studio {snap.appVersion} — оболочка над пятью чужими программами:{" "}
+          {ENGINES.map((e, i) => (
+            <span key={e.id}>
+              <span style={{ color: "var(--muted)" }}>{e.repo}</span>
+              {i < ENGINES.length - 2 ? ", " : i === ENGINES.length - 2 ? " и " : ". "}
+            </span>
+          ))}
+          Сам обход делают они, приложение лишь удобно ими управляет.
+        </div></>}
+
+        {section === "system" && <>
         <div className="card">
           <h2 style={{ marginBottom: 10 }}>Инструменты zapret</h2>
           <p className="sub" style={{ marginBottom: 4, fontSize: 12 }}>
@@ -1037,17 +1089,8 @@ export default function Settings({
             )}
           </AnimatePresence>
         </div>
+</>}
 
-        <div className="card" style={{ color: "var(--dim)", fontSize: 12 }}>
-          Zapret Studio {snap.appVersion} — оболочка над пятью чужими программами:{" "}
-          {ENGINES.map((e, i) => (
-            <span key={e.id}>
-              <span style={{ color: "var(--muted)" }}>{e.repo}</span>
-              {i < ENGINES.length - 2 ? ", " : i === ENGINES.length - 2 ? " и " : ". "}
-            </span>
-          ))}
-          Сам обход делают они, приложение лишь удобно ими управляет.
-        </div>
       </div>
     </div>
   );

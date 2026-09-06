@@ -157,7 +157,7 @@ const state: Snapshot = {
   service: { installed: false, running: false, strategy: null },
   autostart: false,
   testing: false,
-  appVersion: "1.4.1",
+  appVersion: "1.5.0",
   managedDir: "C:\\Users\\Marakabo\\AppData\\Roaming\\com.marakabo.zapret-studio\\zapret",
   ipsetMode: "loaded",
   fakes: {
@@ -543,8 +543,8 @@ export const mockApi = {
   },
   checkAppUpdate: () =>
     wait<UpdateCheck>({
-      current: "1.4.1",
-      latest: "1.4.1",
+      current: "1.5.0",
+      latest: "1.5.0",
       hasUpdate: false,
       release: null,
       error: null,
