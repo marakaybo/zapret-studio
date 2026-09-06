@@ -11,6 +11,16 @@
 //! подобным. Наружу выглядит одинаково: локальный прокси на 127.0.0.1,
 //! в который трафик попадает через системные настройки Windows.
 //!
+//! Отдельная история — режим TUN. Он не обходит блокировки: обход остаётся
+//! тем же самым (фрагментация или свой сервер). TUN меняет другое — что
+//! именно попадает в ядро. Без него через прокси идёт только TCP тех
+//! приложений, что читают системные настройки Windows; с ним ядро поднимает
+//! виртуальный сетевой адаптер и забирает весь трафик машины, включая UDP,
+//! игры и программы, которым системный прокси безразличен.
+//!
+//! Драйвер wintun вшит в сам `sing-box.exe`, ставить отдельно ничего не надо,
+//! но нужны права администратора — они у приложения и так есть.
+//!
 //! Конфиг пишем в формате sing-box 1.12 и новее (правила с `action`, DNS с
 //! `type`) — приложение ставит последнюю версию само.
 
@@ -74,7 +84,26 @@ const BUILTIN: &[core::Builtin] = &[
         "Весь трафик уходит на сервер из твоей ссылки. Это уже не обход, а туннель: работает всё, но скорость и пинг — какие у сервера",
         "outbound по ссылке · нужен свой сервер",
     ),
+    (
+        "tun-frag",
+        "Весь трафик: фрагментация",
+        "То же разрезание TLS, но ядро поднимает сетевой адаптер и забирает трафик всей машины — включая программы, которым системный прокси безразличен. Обходит ровно так же, зато охват шире",
+        "tun + route-options: tls_fragment · нужны права администратора",
+    ),
+    (
+        "tun-server",
+        "Весь трафик: свой сервер",
+        "Полноценный VPN: в туннель уходит всё, включая UDP, игры и голос. Единственный пресет, после которого «через прокси идёт только TCP» перестаёт быть правдой. Нужен свой сервер",
+        "tun + outbound по ссылке · нужны права администратора",
+    ),
 ];
+
+/// Пресеты, которые поднимают виртуальный адаптер. Им нельзя прописывать
+/// системный прокси: трафик и так весь у них, а прокси поверх туннеля —
+/// это ещё один круг по той же дороге.
+pub fn is_tun(id: &str) -> bool {
+    id.starts_with("tun")
+}
 
 pub fn presets() -> Vec<Preset> {
     core::presets(BUILTIN)
@@ -172,8 +201,25 @@ fn server_outbound(l: &ServerLink) -> Result<Value, String> {
     Ok(out)
 }
 
-/// Собирает конфиг под выбранный пресет. Ссылка нужна только серверному
-/// пресету — фрагментация работает сама по себе.
+/// Виртуальный адаптер. Адреса взяты из примеров sing-box; IPv6 добавлен
+/// намеренно — без него трафик по IPv6 пошёл бы мимо туннеля, а это ровно та
+/// утечка, о которой предупреждает диагностика.
+fn tun_inbound() -> Value {
+    json!({
+        "type": "tun",
+        "tag": "tun-in",
+        "address": ["172.19.0.1/30", "fdfe:dcba:9876::1/126"],
+        "mtu": 9000,
+        "auto_route": true,
+        // strict_route чинит утечку DNS, но ломает VirtualBox и подобное,
+        // а главное — оставляет за собой правила, если ядро убить грубо.
+        // Пусть лучше остаётся выключенным: цена ошибки тут — вся сеть
+        "strict_route": false
+    })
+}
+
+/// Собирает конфиг под выбранный пресет. Ссылка нужна только серверным
+/// пресетам — фрагментация работает сама по себе.
 pub fn config(id: &str, port: u16, server: Option<&ServerLink>) -> Result<Value, String> {
     let mut outbounds = vec![json!({ "type": "direct", "tag": "direct" })];
     // Локальная сеть мимо туннеля: роутеру и принтерам в нём делать нечего
@@ -197,28 +243,73 @@ pub fn config(id: &str, port: u16, server: Option<&ServerLink>) -> Result<Value,
             "action": "route-options",
             "tls_record_fragment": true
         })),
-        "server" => {
+        "server" | "tun-server" => {
             let l = server.ok_or(
-                "Для этого пресета нужен свой сервер — вставь ссылку vless:// в настройках sing-box",
+                "Для этого пресета нужен свой сервер — вставь ссылку vless:// или подписку на вкладке пресетов",
             )?;
             outbounds.push(server_outbound(l)?);
             final_out = "proxy";
         }
+        "tun-frag" => rules.push(json!({
+            "network": ["tcp"],
+            "action": "route-options",
+            "tls_fragment": true
+        })),
         other => return Err(format!("неизвестный пресет sing-box: {other}")),
+    }
+
+    let tun = is_tun(id);
+    // Локальный прокси оставляем всегда, даже в режиме TUN: по нему видно,
+    // что ядро поднялось, и через него же идёт проверка стратегий
+    let mut inbounds = vec![json!({
+        "type": "mixed",
+        "tag": "in",
+        "listen": "127.0.0.1",
+        "listen_port": port
+    })];
+
+    let mut dns = json!({ "servers": [{ "type": "local", "tag": "local" }] });
+    if tun {
+        inbounds.push(tun_inbound());
+        // Забрав трафик, ядро обязано отвечать и на запросы DNS: они тоже
+        // идут в адаптер. Иначе не разрешится ни одно имя
+        rules.insert(0, json!({ "action": "sniff" }));
+        if final_out == "proxy" {
+            let l = server.expect("серверный пресет без ссылки сюда не дойдёт");
+            // Имена разрешаем через туннель — иначе провайдер видит, куда мы
+            // ходим, даже когда сам трафик спрятан
+            dns = json!({
+                "servers": [
+                    { "type": "udp", "tag": "remote", "server": "1.1.1.1", "detour": "proxy" },
+                    { "type": "local", "tag": "local" }
+                ],
+                "rules": [{ "domain": [l.host.clone()], "action": "route", "server": "local" }],
+                "final": "remote",
+                // Сервер может быть без IPv6: пусть имена по возможности
+                // разрешаются в IPv4, иначе половина сайтов не откроется
+                "strategy": "prefer_ipv4"
+            });
+            // Адрес самого сервера — мимо туннеля, иначе получится петля
+            rules.insert(
+                1,
+                json!({ "domain": [l.host.clone()], "action": "route", "outbound": "direct" }),
+            );
+        }
+    }
+
+    let mut route = json!({ "rules": rules, "final": final_out });
+    if tun {
+        // Без этого исходящие ядра ушли бы обратно в собственный адаптер
+        route["auto_detect_interface"] = json!(true);
+        route["default_domain_resolver"] = json!("local");
     }
 
     Ok(json!({
         "log": { "level": "warn", "timestamp": true },
-        // Один резолвер системный: так ядро не спорит с настройками Windows
-        "dns": { "servers": [{ "type": "local", "tag": "local" }] },
-        "inbounds": [{
-            "type": "mixed",
-            "tag": "in",
-            "listen": "127.0.0.1",
-            "listen_port": port
-        }],
+        "dns": dns,
+        "inbounds": inbounds,
         "outbounds": outbounds,
-        "route": { "rules": rules, "final": final_out }
+        "route": route
     }))
 }
 
@@ -302,6 +393,55 @@ mod tests {
         assert_eq!(out["transport"]["headers"]["Host"], "cdn.example.com");
         assert_eq!(out["password"], "pass");
         assert_eq!(out["tls"]["enabled"], true);
+    }
+
+    /// TUN обязан забрать и IPv6, иначе он утечёт мимо туннеля — ровно то,
+    /// на что ругается диагностика.
+    #[test]
+    fn tun_takes_the_whole_machine_including_ipv6() {
+        let cfg = config("tun-frag", 1082, None).unwrap();
+        let tun = cfg["inbounds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["type"] == "tun")
+            .expect("адаптер должен быть");
+        let addrs = tun["address"].as_array().unwrap();
+        assert!(addrs.iter().any(|a| a.as_str().unwrap().contains(':')), "нет IPv6: {addrs:?}");
+        assert_eq!(tun["auto_route"], true);
+        // Локальный прокси остаётся: по нему приложение понимает, что ядро живо
+        assert!(cfg["inbounds"].as_array().unwrap().iter().any(|i| i["type"] == "mixed"));
+        assert_eq!(cfg["route"]["auto_detect_interface"], true);
+    }
+
+    /// Соединение с самим сервером не должно уходить в собственный туннель.
+    #[test]
+    fn tun_server_never_loops_through_itself() {
+        let cfg = config("tun-server", 1082, Some(&reality())).unwrap();
+        let rules = cfg["route"]["rules"].as_array().unwrap();
+        let bypass = rules
+            .iter()
+            .find(|r| r["outbound"] == "direct" && r["domain"].is_array())
+            .expect("адрес сервера должен идти мимо туннеля");
+        assert_eq!(bypass["domain"][0], "srv.example.com");
+        assert_eq!(cfg["route"]["final"], "proxy");
+        // И его имя разрешается локально, иначе не с чего начать
+        let dns_rule = &cfg["dns"]["rules"][0];
+        assert_eq!(dns_rule["server"], "local");
+        assert_eq!(dns_rule["domain"][0], "srv.example.com");
+        assert_eq!(cfg["dns"]["final"], "remote");
+    }
+
+    #[test]
+    fn tun_presets_are_recognised() {
+        assert!(is_tun("tun-frag"));
+        assert!(is_tun("tun-server"));
+        assert!(!is_tun("frag"));
+        assert!(!is_tun("server"));
+        // Оба серверных пресета без ссылки собраться не должны
+        for id in ["server", "tun-server"] {
+            assert!(config(id, 1082, None).is_err(), "{id}");
+        }
     }
 
     #[test]

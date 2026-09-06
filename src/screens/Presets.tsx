@@ -408,6 +408,11 @@ export default function Presets({
                       </span>
                     )}
                     {isRunning && <span className="pill live">работает</span>}
+                    {core && p.id.startsWith("tun") && (
+                      <span className="pill best" title="Поднимает сетевой адаптер и забирает трафик всей машины">
+                        весь трафик
+                      </span>
+                    )}
                     {!p.builtin && <span className="pill">своя</span>}
                   </div>
                   <div className="sub" style={{ fontSize: 12.5, marginTop: 3 }}>
@@ -416,7 +421,7 @@ export default function Presets({
                   <div className="mono" style={{ fontSize: 11.5, color: "var(--dim)", marginTop: 6, userSelect: "text" }}>
                     {p.args.join(" ")}
                   </div>
-                  {core && p.id.startsWith("server") && !core.server && (
+                  {core && p.id.includes("server") && !core.server && (
                     <div
                       style={{
                         fontSize: 12,

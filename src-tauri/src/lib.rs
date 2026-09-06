@@ -726,7 +726,19 @@ fn start_core(
     let core = state.core(engine).expect("ядро из списка ядер");
     core.start(app, &state.runner, &root, p, &config, port, false)?;
 
-    if cc.system_proxy {
+    // Режим TUN забирает трафик сам, целым адаптером. Системный прокси
+    // поверх него — лишний круг по той же дороге, а снять его надо: иначе
+    // после переключения на TUN в настройках Windows остался бы наш адрес
+    let tun = engine == "singbox" && singbox::is_tun(&p.id);
+    if tun {
+        if let Some(m) = clear_system_proxy(state)? {
+            messages.push(m);
+        }
+        messages.push(format!(
+            "{}: поднят сетевой адаптер — через него идёт весь трафик машины, включая UDP и игры",
+            spec.name
+        ));
+    } else if cc.system_proxy {
         match apply_system_proxy(state, port, spec.name) {
             Ok(m) => messages.push(m),
             Err(e) => {
@@ -2438,9 +2450,17 @@ fn spawn_watchdog(app: AppHandle) {
 }
 
 async fn watchdog_round(app: &AppHandle) {
-    let (enabled, auto_fix, engine, proxy, own, best, current, busy) = {
+    let (enabled, auto_fix, engine, proxy, own, best, current, busy, tun) = {
         let state = app.state::<AppState>();
         let cfg = state.config();
+        // В режиме TUN через туннель идёт вообще всё, включая контрольную
+        // точку. Значит, «интернета нет» и «обход сломался» перестают
+        // различаться — и списывать всё на сеть больше нельзя
+        let tun = cfg.engine == "singbox"
+            && state
+                .core("singbox")
+                .and_then(|c| c.current())
+                .is_some_and(|id| singbox::is_tun(&id));
         (
             cfg.watchdog,
             cfg.watchdog_auto_fix,
@@ -2450,6 +2470,7 @@ async fn watchdog_round(app: &AppHandle) {
             engine_best(&cfg),
             engine_current(&state, &cfg),
             state.testing.load(Ordering::Relaxed) || !state.engine_running(),
+            tun,
         )
     };
     // Выключенный обход сторожить нечего, а во время проверки стратегий
@@ -2462,8 +2483,9 @@ async fn watchdog_round(app: &AppHandle) {
     let _ = app.emit("watchdog", health.clone());
 
     let state = app.state::<AppState>();
-    // Сеть лежит целиком — обход тут ни при чём, молчим
-    if !health.control_ok {
+    // Сеть лежит целиком — обход тут ни при чём, молчим. Но только не в
+    // режиме TUN: там нечему лежать отдельно от туннеля
+    if !health.control_ok && !tun {
         state.runner.log(Some(app), "info", "Сторож: интернет не отвечает, обход не виноват");
         return;
     }

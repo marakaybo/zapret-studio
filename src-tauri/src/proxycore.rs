@@ -254,9 +254,10 @@ pub fn find<'a>(all: &'a [Preset], id: &str) -> Option<&'a Preset> {
     all.iter().find(|p| p.id == id)
 }
 
-/// Пресеты, которые без сервера бессмысленны, названы одинаково у обоих ядер.
+/// Пресеты, которые без сервера бессмысленны. У обоих ядер слово «server»
+/// стоит в имени: `server`, `server-frag`, `tun-server`.
 pub fn needs_server(id: &str) -> bool {
-    id.starts_with("server")
+    id.contains("server")
 }
 
 #[cfg(test)]
@@ -267,7 +268,9 @@ mod tests {
     fn tells_server_presets_apart() {
         assert!(needs_server("server"));
         assert!(needs_server("server-frag"));
+        assert!(needs_server("tun-server"));
         assert!(!needs_server("frag-tlshello"));
+        assert!(!needs_server("tun-frag"));
     }
 
     #[test]

@@ -54,6 +54,8 @@ const SINGBOX_PRESETS: Preset[] = [
   ["frag-slow", "Фрагментация с паузой", "Между частями ядро выжидает полсекунды", "route-options: tls_fragment + пауза 500 мс"],
   ["record-frag", "Разрыв TLS-записи", "Приветствие раскладывается на несколько TLS-записей", "route-options: tls_record_fragment"],
   ["server", "Через свой сервер", "Весь трафик уходит на сервер из твоей ссылки", "outbound по ссылке · нужен свой сервер"],
+  ["tun-frag", "Весь трафик: фрагментация", "Ядро поднимает сетевой адаптер и забирает трафик всей машины — включая программы, которым системный прокси безразличен", "tun + route-options: tls_fragment · нужны права администратора"],
+  ["tun-server", "Весь трафик: свой сервер", "Полноценный VPN: в туннель уходит всё, включая UDP, игры и голос. Нужен свой сервер", "tun + outbound по ссылке · нужны права администратора"],
 ].map(([id, name, desc, shape]) => ({ id, name, desc, args: [shape], builtin: true }));
 
 const coreSettings = (port: number, version: string): CoreSettings => ({
@@ -155,7 +157,7 @@ const state: Snapshot = {
   service: { installed: false, running: false, strategy: null },
   autostart: false,
   testing: false,
-  appVersion: "1.3.0",
+  appVersion: "1.4.0",
   managedDir: "C:\\Users\\Marakabo\\AppData\\Roaming\\com.marakabo.zapret-studio\\zapret",
   ipsetMode: "loaded",
   fakes: {
@@ -541,8 +543,8 @@ export const mockApi = {
   },
   checkAppUpdate: () =>
     wait<UpdateCheck>({
-      current: "1.3.0",
-      latest: "1.3.0",
+      current: "1.4.0",
+      latest: "1.4.0",
       hasUpdate: false,
       release: null,
       error: null,
