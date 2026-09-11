@@ -1,9 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
-import { Bolt, Download, Folder, Globe, Link, Refresh, Shield } from "../icons";
+import { useEffect, useState } from "react";
+import { Alert, Bolt, Download, Folder, Globe, Link, Refresh, Shield } from "../icons";
 import { EnginePicker, Segmented, Spinner, Switch } from "../components/ui";
 import { ENGINES, engineInfo } from "../engines";
 import type {
+  DnsProvider,
   Check as DiagCheck,
   Core,
   CoreState,
@@ -239,6 +240,10 @@ export default function Settings({
   onByedpiPort,
   onSystemProxy,
   onWarpCheck,
+  onDnsProviders,
+  onDnsSet,
+  onDnsRestore,
+  onDnsCheck,
   onInstallWarp,
   coreUpdate,
   coreChecking,
@@ -293,6 +298,10 @@ export default function Settings({
   onByedpiPort: (port: number) => void;
   onSystemProxy: (enable: boolean) => void;
   onWarpCheck: () => Promise<WarpProbe>;
+  onDnsProviders: () => Promise<DnsProvider[]>;
+  onDnsSet: (provider: string) => void;
+  onDnsRestore: () => void;
+  onDnsCheck: () => Promise<DiagCheck>;
   onInstallWarp: () => void;
   coreUpdate: Record<Core, UpdateCheck | null>;
   coreChecking: Record<Core, boolean>;
@@ -324,6 +333,39 @@ export default function Settings({
   const [theirs, setTheirs] = useState("");
   const [probe, setProbe] = useState<WarpProbe | null>(null);
   const [probing, setProbing] = useState(false);
+  const dns = snap.dns;
+  const dnsRefusal = dns.blocked;
+  const [providers, setProviders] = useState<DnsProvider[]>([]);
+  const [dnsAnswer, setDnsAnswer] = useState<DiagCheck | null>(null);
+  const [dnsBusy, setDnsBusy] = useState(false);
+
+  // Список резолверов живёт на бэкенде: адреса обязаны совпадать с теми,
+  // для которых у Windows есть шаблон DoH, — держать вторую копию здесь
+  // значит однажды разойтись с ней
+  useEffect(() => {
+    let alive = true;
+    onDnsProviders()
+      .then((list) => alive && setProviders(list))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [onDnsProviders]);
+
+  // Ответ описывает те адреса, при которых его получили. Стоит их сменить —
+  // и прежний ответ начинает врать: после возврата к провайдеру на экране
+  // так и висело бы «адреса настоящие»
+  const dnsNow = dns.servers.join(",");
+  useEffect(() => setDnsAnswer(null), [dnsNow]);
+
+  const checkDns = async () => {
+    setDnsBusy(true);
+    try {
+      setDnsAnswer(await onDnsCheck());
+    } finally {
+      setDnsBusy(false);
+    }
+  };
 
   const checkWarp = async () => {
     setProbing(true);
@@ -888,6 +930,103 @@ export default function Settings({
         </div></>}
 
         {section === "system" && <>
+        <div className="card">
+          <h2 style={{ marginBottom: 4 }}>DNS</h2>
+          <p className="sub" style={{ fontSize: 12, marginBottom: 4 }}>
+            Здесь спрашивают адрес сайта, и подмена тут бьёт раньше DPI: браузер уходит не туда
+            ещё до обхода, а обходу нечего резать — соединение и так идёт не к тому серверу.
+            Шифрование прячет сам вопрос, так что подменить ответ провайдер уже не может.
+          </p>
+
+          {dnsRefusal ? (
+            <div className="notice warn" style={{ marginBottom: 10 }}>
+              <span className="n-icon">
+                <Alert />
+              </span>
+              <div className="n-body">
+                <div className="n-title">Настройки DNS сейчас не наши</div>
+                <div className="n-text">{dnsRefusal}</div>
+              </div>
+            </div>
+          ) : null}
+
+          <Row
+            title="Сейчас"
+            desc={
+              dns.error
+                ? dns.error
+                : `Адаптер «${dns.adapter}» · ${
+                    dns.servers.length ? dns.servers.join(", ") : "адресов нет"
+                  } · ${dns.fromDhcp ? "выдал роутер" : "прописаны вручную"}`
+            }
+          >
+            <span className={`pill ${dns.encrypted ? "live" : ""}`}>
+              {dns.encrypted ? "шифруется" : "открытым текстом"}
+            </span>
+          </Row>
+
+          {providers.map((p) => {
+            const on = dns.provider === p.name;
+            return (
+              <Row key={p.id} title={p.name} desc={`${p.servers.join(", ")} · ${p.note}`}>
+                <button
+                  className={`btn sm ${on ? "" : "primary"}`}
+                  onClick={() => onDnsSet(p.id)}
+                  disabled={busy || !!dnsRefusal || on}
+                >
+                  {on ? "включён" : "Включить"}
+                </button>
+              </Row>
+            );
+          })}
+
+          <Row
+            title="Вернуть как было"
+            desc={
+              cfg.savedDns
+                ? cfg.savedDns.fromDhcp
+                  ? `Вернём адреса роутера на «${cfg.savedDns.adapter}»`
+                  : `Вернём прежние адреса: ${cfg.savedDns.v4.join(", ")}`
+                : "Приложение настройки DNS не меняло — возвращать нечего"
+            }
+          >
+            <button
+              className="btn sm ghost"
+              onClick={onDnsRestore}
+              disabled={busy || !cfg.savedDns}
+            >
+              <Refresh /> Вернуть
+            </button>
+          </Row>
+
+          <Row
+            title="Проверить ответы"
+            desc={
+              dnsAnswer
+                ? dnsAnswer.detail
+                : "Спрошу два имени, настоящие адреса которых известны заранее. Записанная настройка ещё не значит, что подмены больше нет"
+            }
+          >
+            <span
+              className={`pill ${
+                dnsAnswer ? (dnsAnswer.level === "ok" ? "live" : "") : ""
+              }`}
+              style={dnsAnswer && dnsAnswer.level !== "ok" ? { color: "var(--bad)" } : undefined}
+            >
+              {dnsAnswer ? (dnsAnswer.level === "ok" ? "честные" : "подмена") : "—"}
+            </span>
+            <button className="btn sm ghost" onClick={checkDns} disabled={dnsBusy}>
+              {dnsBusy ? <Spinner /> : <Refresh />} Проверить
+            </button>
+          </Row>
+
+          <p className="sub" style={{ fontSize: 12, marginTop: 8 }}>
+            Настройка держится сама по себе и переживает выход из приложения — в отличие от
+            системного прокси, который без работающего движка оставил бы тебя без интернета
+            и потому снимается при остановке.
+          </p>
+        </div>
+
         <div className="card">
           <h2 style={{ marginBottom: 10 }}>Инструменты zapret</h2>
           <p className="sub" style={{ marginBottom: 4, fontSize: 12 }}>

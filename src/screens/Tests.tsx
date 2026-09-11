@@ -105,6 +105,64 @@ function OwnTargets({
 
 const scoreColor = (v: number) => (v >= 90 ? "var(--ok)" : v >= 55 ? "var(--warn)" : "var(--bad)");
 
+/** Группа UDP-целей: по ней одной видно, пойдут ли голос и игры. */
+const UDP_GROUP = "Голос и UDP";
+
+/**
+ * Совет под движок. UDP каждый из них закрывает по-своему, и совет для
+ * zapret для ByeDPI бессмыслен: там UDP не «плохо обходится», а не идёт
+ * через прокси вовсе.
+ */
+function udpAdvice(r: StrategyResult, snap: Snapshot): string {
+  if (snap.engine === "zapret") {
+    // Игровой диапазон UDP поднимают только режимы «весь» и «UDP»
+    const covers = snap.config.gameFilter === "all" || snap.config.gameFilter === "udp";
+    return covers
+      ? "Игровой фильтр включён, а UDP всё равно режут. Попробуй другую стратегию или смени фейк для игр в настройках"
+      : "Включи игровой фильтр на главной — zapret возьмётся и за порты 1024–65535, где живут игры и голос";
+  }
+  if (snap.engine === "goodbyedpi") {
+    return "GoodbyeDPI занят только TCP: голос и игры остаются за zapret с игровым фильтром";
+  }
+  if (snap.engine === "singbox" && r.strategy.startsWith("tun")) {
+    return r.strategy === "tun-server"
+      ? "Через туннель UDP тоже не пошёл — дело в сервере, а не в блокировке у тебя"
+      : "Фрагментация правит только приветствие TLS, до UDP она не достаёт. Голос и игры чинит пресет «Весь трафик: свой сервер»";
+  }
+  return "Этот движок UDP не трогает: голос и игры идут мимо системного прокси напрямую. Для них нужен zapret с игровым фильтром или sing-box в режиме «Весь трафик» со своим сервером";
+}
+
+/**
+ * Что означает результат по UDP. Цифра «Голос и UDP 0/2» сама по себе
+ * ничего не подсказывает, а вопрос за ней — тот самый, ради которого сюда
+ * и приходят: заработает ли голос и пустит ли в игру.
+ */
+function UdpVerdict({ r, snap }: { r: StrategyResult; snap: Snapshot }) {
+  const g = r.groups.find((x) => x.group === UDP_GROUP);
+  if (!g || !g.total) return null;
+
+  const [kind, title, text] =
+    g.ok === g.total
+      ? (["ok", "Голос и игры пойдут", "UDP проходит — то, чем живут голос Discord и игровой трафик"] as const)
+      : g.ok > 0
+        ? ([
+            "warn",
+            `UDP проходит не везде: ${g.ok} из ${g.total}`,
+            "Похоже, прикрыт отдельный порт, а не весь UDP, — голос может подниматься через раз",
+          ] as const)
+        : (["bad", "Голос Discord и игры не пойдут", udpAdvice(r, snap)] as const);
+
+  return (
+    <div className={`notice ${kind}`} style={{ gridColumn: "1 / -1", marginBottom: 8 }}>
+      <span className="n-icon">{kind === "ok" ? <Check /> : <Alert />}</span>
+      <div className="n-body">
+        <div className="n-title">{title}</div>
+        <div className="n-text">{text}</div>
+      </div>
+    </div>
+  );
+}
+
 function GroupBadges({ r }: { r: StrategyResult }) {
   return (
     <div className="groups">
@@ -125,6 +183,7 @@ function ResultCard({
   rank,
   isBest,
   title,
+  snap,
   onApply,
 }: {
   r: StrategyResult;
@@ -132,6 +191,7 @@ function ResultCard({
   isBest: boolean;
   /** У zapret это имя батника, у ByeDPI — название пресета */
   title: string;
+  snap: Snapshot;
   onApply: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -194,6 +254,7 @@ function ResultCard({
               {r.error && (
                 <div style={{ gridColumn: "1 / -1", color: "var(--bad)", fontSize: 12 }}>{r.error}</div>
               )}
+              {r.started && <UdpVerdict r={r} snap={snap} />}
               {r.targets.map((t) => (
                 <div className="target" key={t.id}>
                   <span style={{ color: t.ok ? "var(--ok)" : "var(--bad)", display: "flex" }}>
@@ -454,6 +515,7 @@ export default function Tests({
               rank={i + 1}
               isBest={r.strategy === bestName}
               title={titleOf(r)}
+              snap={snap}
               onApply={onApply}
             />
           ))}

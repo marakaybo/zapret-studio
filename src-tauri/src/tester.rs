@@ -29,11 +29,14 @@ pub enum Expect {
 /// Ws — рукопожатие WebSocket: именно им живёт приложение Discord, и именно
 /// его DPI рвёт чаще всего, оставляя сайт доступным.
 /// Tcp — контрольная точка «интернет вообще жив».
+/// Udp — обмен по STUN. Всё остальное здесь ходит по TCP и потому молчит
+/// о том, что режут UDP, — а голос Discord и игры живут именно на нём.
 #[derive(Clone)]
 pub enum Probe {
     Http(String, Expect),
     Ws(String),
     Tcp(String, u16),
+    Udp(String, u16),
 }
 
 #[derive(Clone)]
@@ -58,6 +61,10 @@ fn head(needle: &str) -> Expect {
 
 fn body(needle: &str) -> Expect {
     Expect::Body(needle.into())
+}
+
+fn udp(host: &str, port: u16) -> Probe {
+    Probe::Udp(host.into(), port)
 }
 
 /// Адреса и признаки подобраны по живым ответам: у Discord — его собственный
@@ -92,6 +99,39 @@ pub fn builtin() -> Vec<Target> {
             http("https://engage.cloudflareclient.com/", head("cf-ray"))),
         target("cf-dns", "Cloudflare", "cloudflare-dns.com",
             http("https://cloudflare-dns.com/dns-query?name=example.com", head("cf-ray"))),
+        // Игровые входы — это вход в аккаунт и раздача обновлений, то самое,
+        // обо что спотыкается «не заходит в игру». Открытая страница
+        // разработчика об этом не говорит ничего, поэтому здесь ровно те
+        // адреса, куда стучится сам лаунчер, и признаки живых ответов.
+        target("steam", "Игры", "api.steampowered.com",
+            http("https://api.steampowered.com/ISteamWebAPIUtil/GetServerInfo/v1/", body("servertime"))),
+        target("steam-cdn", "Игры", "cdn.cloudflare.steamstatic.com",
+            http("https://cdn.cloudflare.steamstatic.com/steam/apps/570/header.jpg",
+                head("content-type: image/jpeg"))),
+        target("riot", "Игры", "auth.riotgames.com (вход)",
+            http("https://auth.riotgames.com/.well-known/openid-configuration",
+                body("riotgames.com/authorize"))),
+        target("epic", "Игры", "epicgames.com (лаунчер)",
+            http("https://launcher-public-service-prod-m.ol.epicgames.com/launcher/api/public/distributionpoints/",
+                body("distributions"))),
+        target("blizzard", "Игры", "oauth.battle.net (вход)",
+            http("https://oauth.battle.net/oauth/.well-known/openid-configuration",
+                body("oauth.battle.net/oauth"))),
+        // Профиль Notch — самая старая запись Mojang, её отдаёт тот самый
+        // сервер, что пускает в игру по лицензии
+        target("minecraft", "Игры", "sessionserver.mojang.com",
+            http("https://sessionserver.mojang.com/session/minecraft/profile/069a79f444e94726a5befca90e38aaf5",
+                body("Notch"))),
+        target("roblox", "Игры", "clientsettings.roblox.com",
+            http("https://clientsettings.roblox.com/v2/client-version/WindowsPlayer",
+                body("clientVersionUpload"))),
+        // Единственное здесь, что идёт по UDP. Два разных хозяина и два
+        // разных порта: так видно разницу между «UDP вырезан весь» и
+        // «прикрыт один порт», а это разные беды и разное лечение.
+        target("udp-google", "Голос и UDP", "stun.l.google.com:19302",
+            udp("stun.l.google.com", 19302)),
+        target("udp-cloudflare", "Голос и UDP", "stun.cloudflare.com:3478",
+            udp("stun.cloudflare.com", 3478)),
         target("dns1", "Связь", "1.1.1.1:53", Probe::Tcp("1.1.1.1".into(), 53)),
         target("dns2", "Связь", "8.8.8.8:53", Probe::Tcp("8.8.8.8".into(), 53)),
     ]
@@ -136,7 +176,8 @@ pub fn all(custom: &[String]) -> Vec<Target> {
 }
 
 /// Группы в том порядке, в каком их показывает интерфейс.
-pub const GROUPS: &[&str] = &["Discord", "YouTube", "Google", "Cloudflare", "Связь", OWN_GROUP];
+pub const GROUPS: &[&str] =
+    &["Discord", "YouTube", "Google", "Cloudflare", "Игры", "Голос и UDP", "Связь", OWN_GROUP];
 
 const SPEED_URL: &str = "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg";
 
@@ -243,6 +284,95 @@ async fn socks5_connect(port: u16, host: &str, dest_port: u16) -> Result<(), Str
         return Err("прокси не смог соединиться".into());
     }
     Ok(())
+}
+
+/// Номер запроса STUN: двенадцать байт, которые сервер обязан вернуть
+/// нетронутыми. Криптостойкость тут ни при чём, задача одна — не спутать
+/// ответ на наш запрос с чужим пакетом, прилетевшим на тот же сокет.
+/// Часы плюс счётчик это делают, и лишней зависимости заводить не надо.
+fn stun_txid() -> [u8; 12] {
+    static SEQ: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    let mut id = [0u8; 12];
+    id[..8].copy_from_slice(&nanos.to_be_bytes());
+    id[8..].copy_from_slice(&SEQ.fetch_add(1, Ordering::Relaxed).to_be_bytes());
+    id
+}
+
+/// Проходит ли UDP — вопрос, на который остальные цели ответить не могут:
+/// они ходят по TCP, а режут это порознь. Приложение обещает, что игровой
+/// фильтр чинит игры, а TUN — голос; до сих пор проверить это было нечем,
+/// и человек шёл угадывать в саму игру.
+///
+/// Просто отправить пакет мало: UDP доставку не подтверждает, и `send`
+/// удаётся даже в пустоту. Нужен ответ, который мы умеем узнать, — поэтому
+/// говорим на STUN (RFC 5389). Сервер обязан вернуть тип `0x0101`, тот же
+/// magic cookie и тот же номер запроса, так что ни заглушка провайдера, ни
+/// случайный пакет за успех не сойдут. Этим же рукопожатием начинают голос
+/// Discord и игры, когда ищут себя за NAT: проверяем их путь, а не подобие.
+const STUN_COOKIE: [u8; 4] = [0x21, 0x12, 0xA4, 0x42];
+
+/// Собирает Binding Request: тип, длина тела, cookie, номер запроса.
+fn stun_request(txid: &[u8; 12]) -> Vec<u8> {
+    let mut req = Vec::with_capacity(20);
+    req.extend_from_slice(&[0x00, 0x01, 0x00, 0x00]);
+    req.extend_from_slice(&STUN_COOKIE);
+    req.extend_from_slice(txid);
+    req
+}
+
+/// Что пришло в ответ — разбираем отдельно от сети, чтобы каждый способ
+/// соврать можно было проверить тестом, а не на живом провайдере.
+fn stun_reply(reply: &[u8], txid: &[u8; 12]) -> Result<(), String> {
+    if reply.len() < 20 {
+        return Err("ответ короче заголовка STUN".into());
+    }
+    if reply[4..8] != STUN_COOKIE {
+        return Err("ответил не STUN — пакет подменили по дороге".into());
+    }
+    if reply[8..20] != txid[..] {
+        return Err("ответ на чужой запрос".into());
+    }
+    if reply[..2] != [0x01u8, 0x01] {
+        return Err("сервер STUN отказал".into());
+    }
+    Ok(())
+}
+
+async fn stun_probe(host: &str, port: u16) -> Result<(), String> {
+    let socket = tokio::net::UdpSocket::bind(("0.0.0.0", 0))
+        .await
+        .map_err(|e| format!("не удалось открыть сокет: {e}"))?;
+    socket
+        .connect((host, port))
+        .await
+        .map_err(|_| "имя не разрешается (DNS)".to_string())?;
+
+    let txid = stun_txid();
+    let req = stun_request(&txid);
+
+    // Две попытки: UDP теряет пакеты и на здоровой сети, и один пропавший
+    // запрос — не повод объявить, что игры не пойдут
+    let mut last = "UDP не проходит — ответа нет".to_string();
+    for _ in 0..2 {
+        if let Err(e) = socket.send(&req).await {
+            last = format!("пакет не ушёл: {e}");
+            continue;
+        }
+        let mut buf = [0u8; 512];
+        match tokio::time::timeout(Duration::from_millis(1500), socket.recv(&mut buf)).await {
+            Ok(Ok(n)) => match stun_reply(&buf[..n], &txid) {
+                Ok(()) => return Ok(()),
+                Err(e) => last = e,
+            },
+            Ok(Err(e)) => last = format!("ошибка приёма: {e}"),
+            Err(_) => last = "UDP не проходит — таймаут".into(),
+        }
+    }
+    Err(last)
 }
 
 /// Куда стучимся для замера задержки: anycast-адрес Cloudflare отвечает
@@ -419,6 +549,16 @@ async fn probe_one(client: &reqwest::Client, t: &Target, proxy: Option<u16>) -> 
                 Err(_) => (false, None, Some("таймаут".into())),
             }
         }
+        // UDP идёт мимо прокси намеренно, и это не та ошибка, от которой
+        // бережёт `socks5_connect`. Просто «через прокси» для него не
+        // существует как путь: ни игры, ни голос системный прокси не
+        // читают — ни при ByeDPI, ни при Xray, — а в режиме TUN sing-box
+        // забирает адаптером и наш пакет тоже. Выходит, при любом движке
+        // правду о UDP говорит ровно прямой запрос.
+        Probe::Udp(host, port) => match stun_probe(host, *port).await {
+            Ok(()) => (true, None, None),
+            Err(e) => (false, None, Some(e)),
+        },
     };
     TargetResult {
         id: t.id.clone(),
@@ -966,6 +1106,115 @@ pub async fn run_core_suite(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Ответ, какой присылает живой сервер: тип 0x0101, тот же cookie,
+    /// тот же номер запроса и адрес, который он о нас увидел.
+    fn good_reply(txid: &[u8; 12]) -> Vec<u8> {
+        let mut r = vec![0x01, 0x01, 0x00, 0x0c];
+        r.extend_from_slice(&STUN_COOKIE);
+        r.extend_from_slice(txid);
+        r.extend_from_slice(&[0x00, 0x20, 0x00, 0x08, 0x00, 0x01, 0x2b, 0x3c]);
+        r.extend_from_slice(&[0x5e, 0x12, 0xa4, 0x43]);
+        r
+    }
+
+    /// Запрос обязан быть ровно таким, каким его ждёт любой сервер STUN:
+    /// ошибись в одном байте — и молчание в ответ мы примем за резаный UDP,
+    /// хотя резать будет нечего.
+    #[test]
+    fn builds_a_real_binding_request() {
+        let txid = [7u8; 12];
+        let req = stun_request(&txid);
+        assert_eq!(req.len(), 20, "заголовок STUN — ровно двадцать байт");
+        assert_eq!(&req[..2], &[0x00, 0x01], "тип Binding Request");
+        assert_eq!(&req[2..4], &[0x00, 0x00], "атрибутов не шлём — длина нулевая");
+        assert_eq!(&req[4..8], &STUN_COOKIE, "magic cookie");
+        assert_eq!(&req[8..20], &txid, "номер запроса");
+    }
+
+    /// Номер запроса нужен ровно затем, чтобы не спутать ответ со случайным
+    /// пакетом. Значит, два подряд не должны совпасть.
+    #[test]
+    fn every_request_gets_its_own_number() {
+        assert_ne!(stun_txid(), stun_txid());
+    }
+
+    /// Настоящий ответ засчитываем, а каждый способ соврать — нет. Иначе
+    /// «UDP проходит» означало бы лишь «что-то прилетело на сокет», и
+    /// заглушка провайдера сошла бы за работающий голос.
+    #[test]
+    fn counts_only_a_genuine_stun_reply() {
+        let txid = [7u8; 12];
+        assert!(stun_reply(&good_reply(&txid), &txid).is_ok(), "живой ответ");
+
+        assert!(stun_reply(&[], &txid).is_err(), "пустой пакет");
+        assert!(stun_reply(&good_reply(&txid)[..19], &txid).is_err(), "обрезанный заголовок");
+
+        let mut alien = good_reply(&txid);
+        alien[5] = 0x99;
+        assert!(stun_reply(&alien, &txid).is_err(), "чужой cookie — подмена по дороге");
+
+        assert!(stun_reply(&good_reply(&[9u8; 12]), &txid).is_err(), "ответ на чужой запрос");
+
+        let mut refused = good_reply(&txid);
+        // 0x0111 — Binding Error Response: сервер ответил, но отказал
+        refused[1] = 0x11;
+        assert!(stun_reply(&refused, &txid).is_err(), "отказ — не успех");
+    }
+
+    /// Игровые цели без признака живого ответа бесполезны: страница
+    /// блокировки провайдера отвечает кодом 200 и сошла бы за вход в игру.
+    #[test]
+    fn game_targets_check_the_answer_not_just_the_code() {
+        let all = builtin();
+        let games: Vec<&Target> = all.iter().filter(|t| t.group == "Игры").collect();
+        assert!(games.len() >= 6, "игровых целей должно быть заметно больше одной");
+        for t in games {
+            match &t.probe {
+                Probe::Http(_, Expect::Any) => {
+                    panic!("{}: «любой ответ» засчитает и заглушку провайдера", t.label)
+                }
+                Probe::Http(_, _) => {}
+                _ => panic!("{}: игровой вход проверяем ответом сервиса", t.label),
+            }
+        }
+    }
+
+    /// Про UDP есть смысл спрашивать только у разных хозяев и разных портов:
+    /// иначе «UDP вырезан весь» и «прикрыт один порт» выглядели бы одинаково,
+    /// а лечатся они по-разному.
+    #[test]
+    fn udp_is_asked_of_two_different_places() {
+        let all = builtin();
+        let udp: Vec<(&str, u16)> = all
+            .iter()
+            .filter_map(|t| match &t.probe {
+                Probe::Udp(host, port) => Some((host.as_str(), *port)),
+                _ => None,
+            })
+            .collect();
+        assert!(udp.len() >= 2, "одной точки мало, чтобы отличить обрыв от совпадения");
+        let hosts: std::collections::HashSet<&str> = udp.iter().map(|(h, _)| *h).collect();
+        let ports: std::collections::HashSet<u16> = udp.iter().map(|(_, p)| *p).collect();
+        assert!(hosts.len() >= 2, "разные хозяева");
+        assert!(ports.len() >= 2, "разные порты");
+    }
+
+    /// Каждая группа из GROUPS должна где-то встречаться, и наоборот: группа
+    /// мимо списка молча не покажется в итогах — её отбросит `probe_all`.
+    #[test]
+    fn every_group_is_listed_and_every_listed_group_exists() {
+        let all = builtin();
+        for t in &all {
+            assert!(GROUPS.contains(&t.group.as_str()), "группа «{}» не в GROUPS", t.group);
+        }
+        for g in GROUPS {
+            if *g == OWN_GROUP {
+                continue;
+            }
+            assert!(all.iter().any(|t| t.group == *g), "в GROUPS есть «{g}», а целей нет");
+        }
+    }
 
     /// Свой сайт можно написать тремя способами, и все три должны привести
     /// к осмысленной проверке, а не к молчаливому пропуску.

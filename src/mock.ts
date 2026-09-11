@@ -128,6 +128,7 @@ const state: Snapshot = {
     byedpiBest: null,
     byedpiLastTestAt: null,
     savedProxy: null,
+    savedDns: null,
     goodbyeDir: "C:\\Users\\Marakabo\\AppData\\Roaming\\com.marakabo.zapret-studio\\goodbyedpi",
     goodbyeManaged: true,
     goodbyeVersion: "0.2.3rc3",
@@ -175,6 +176,19 @@ const state: Snapshot = {
     mode: "WarpWithDnsOverHttps",
     installUrl: "https://one.one.one.one/",
   },
+  dns: {
+    adapter: "Ethernet",
+    index: 11,
+    guid: "{833C45B0-0214-49D1-AAAF-A856A6B8749E}",
+    servers: ["192.168.31.1"],
+    fromDhcp: true,
+    encrypted: false,
+    provider: null,
+    owner: null,
+    tunnel: false,
+    error: null,
+    blocked: null,
+  },
   xray: coreState(XRAY_PRESETS, 1081, "26.3.27"),
   singbox: coreState(SINGBOX_PRESETS, 1082, "1.14.0"),
   checkTargets: ["rutracker.org", "example.com:443"],
@@ -218,6 +232,11 @@ const groupsFor = (score: number) => [
   { group: "Discord", ok: score > 70 ? 4 : score > 40 ? 2 : 0, total: 4 },
   { group: "YouTube", ok: score > 80 ? 4 : score > 45 ? 3 : 1, total: 4 },
   { group: "Google", ok: score > 30 ? 2 : 1, total: 2 },
+  { group: "Игры", ok: score > 60 ? 7 : score > 25 ? 4 : 1, total: 7 },
+  // UDP отдан отдельной ступеньке нарочно: так в браузере видно и случай
+  // «сайты открылись, а голос не пошёл» — ровно тот, ради которого
+  // вердикт на экране проверки и появился
+  { group: "Голос и UDP", ok: score > 85 ? 2 : score > 55 ? 1 : 0, total: 2 },
   { group: "Связь", ok: 2, total: 2 },
 ];
 
@@ -233,10 +252,19 @@ const targetsFor = (score: number) =>
     ["ytvideo", "YouTube", "redirector.googlevideo.com"],
     ["google", "Google", "www.google.com"],
     ["gstatic", "Google", "www.gstatic.com"],
+    ["steam", "Игры", "api.steampowered.com"],
+    ["steam-cdn", "Игры", "cdn.cloudflare.steamstatic.com"],
+    ["riot", "Игры", "auth.riotgames.com (вход)"],
+    ["epic", "Игры", "epicgames.com (лаунчер)"],
+    ["blizzard", "Игры", "oauth.battle.net (вход)"],
+    ["minecraft", "Игры", "sessionserver.mojang.com"],
+    ["roblox", "Игры", "clientsettings.roblox.com"],
+    ["udp-google", "Голос и UDP", "stun.l.google.com:19302"],
+    ["udp-cloudflare", "Голос и UDP", "stun.cloudflare.com:3478"],
     ["dns1", "Связь", "1.1.1.1:53"],
     ["dns2", "Связь", "8.8.8.8:53"],
-  ].map(([id, group, l], i) => {
-    const ok = i / 12 < score / 100;
+  ].map(([id, group, l], i, arr) => {
+    const ok = i / arr.length < score / 100;
     return {
       id,
       group,
@@ -254,8 +282,8 @@ const result = (name: string, score: number, baseline = false): StrategyResult =
   baseline,
   started: true,
   error: null,
-  ok: Math.round((score / 100) * 12),
-  total: 12,
+  ok: Math.round((score / 100) * 23),
+  total: 23,
   score,
   avgMs: 60 + Math.round((100 - score) * 2),
   speedKbs: 400 + score * 40,
@@ -550,6 +578,84 @@ export const mockApi = {
       error: null,
     }),
   installAppUpdate: () => wait("Устанавливаю — приложение сейчас закроется", 900),
+  dnsProviders: () =>
+    wait([
+      {
+        id: "cloudflare",
+        name: "Cloudflare",
+        servers: ["1.1.1.1", "1.0.0.1"],
+        note: "Обычно отвечает быстрее прочих и не ведёт журнал запросов",
+      },
+      {
+        id: "google",
+        name: "Google",
+        servers: ["8.8.8.8", "8.8.4.4"],
+        note: "Вездесущий и надёжный, отвечает чуть медленнее Cloudflare",
+      },
+      {
+        id: "quad9",
+        name: "Quad9",
+        servers: ["9.9.9.9", "149.112.112.112"],
+        note: "Заодно отсекает известные вредоносные адреса",
+      },
+    ], 200),
+  dnsSet: (provider: string) => {
+    const known: Record<string, string[]> = {
+      cloudflare: ["1.1.1.1", "1.0.0.1"],
+      google: ["8.8.8.8", "8.8.4.4"],
+      quad9: ["9.9.9.9", "149.112.112.112"],
+    };
+    const names: Record<string, string> = {
+      cloudflare: "Cloudflare",
+      google: "Google",
+      quad9: "Quad9",
+    };
+    state.dns = {
+      ...state.dns,
+      servers: known[provider] ?? state.dns.servers,
+      fromDhcp: false,
+      encrypted: true,
+      provider: names[provider] ?? null,
+    };
+    state.config = {
+      ...state.config,
+      savedDns: state.config.savedDns ?? {
+        guid: state.dns.guid,
+        index: state.dns.index,
+        adapter: state.dns.adapter,
+        fromDhcp: true,
+        v4: [],
+        v6: [],
+      },
+    };
+    return wait(
+      { snapshot: { ...state }, messages: [`DNS переключён на ${names[provider]} с шифрованием`] },
+      700,
+    );
+  },
+  dnsRestore: () => {
+    state.dns = {
+      ...state.dns,
+      servers: ["192.168.31.1"],
+      fromDhcp: true,
+      encrypted: false,
+      provider: null,
+    };
+    state.config = { ...state.config, savedDns: null };
+    return wait({ snapshot: { ...state }, messages: ["DNS возвращён роутеру"] }, 700);
+  },
+  dnsCheck: () =>
+    wait<Check>({
+      title: "Ответы DNS",
+      level: state.dns.encrypted ? "ok" : "fail",
+      detail: state.dns.encrypted
+        ? "Проверено имён: 2, адреса настоящие"
+        : "Подменены: one.one.one.one → 10.0.0.1",
+      hint: state.dns.encrypted
+        ? null
+        : "Провайдер отвечает на запросы DNS чужими адресами — браузер уходит не туда ещё до DPI.",
+      items: [],
+    }, 900),
   updateGoodbyeBlacklist: () => {
     state.goodbye = { ...state.goodbye, blacklist: 12501 };
     return wait({ snapshot: { ...state }, messages: ["Список заблокированного обновлён: 12501 доменов"] }, 800);

@@ -1118,6 +1118,13 @@ textarea.input {
   color: var(--warn);
 }
 
+.notice.ok {
+  border-left-color: var(--ok);
+}
+.notice.ok .n-icon {
+  color: var(--ok);
+}
+
 .notice.info {
   border-left-color: var(--accent);
 }

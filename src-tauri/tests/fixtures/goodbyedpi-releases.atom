@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:lang="en-US">
+  <id>tag:github.com,2008:https://github.com/ValdikSS/GoodbyeDPI/releases</id>
+  <link type="text/html" rel="alternate" href="https://github.com/ValdikSS/GoodbyeDPI/releases"/>
+  <link type="application/atom+xml" rel="self" href="https://github.com/ValdikSS/GoodbyeDPI/releases.atom"/>
+  <title>Release notes from GoodbyeDPI</title>
+  <updated>2024-09-14T21:34:54Z</updated>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.3rc3</id>
+    <updated>2024-09-15T02:29:33Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.3rc3"/>
+    <title>0.2.3rc3</title>
+    <content type="html">&lt;p&gt;Release candidate 3.&lt;/p&gt;
+&lt;p&gt;Bugfixes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/cb9cc82fde7ee43851856f99ec0666bc1d474f3a&quot;&gt;Fix crash due to missing second parameter in fake_load_random function&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Blacklist option may inconsistently work with Kyber enabled, but should at least work fine without blacklist now. See &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2070245039&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/330/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot;&gt;#330&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/378&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/378/hovercard&quot;&gt;Обход замедления YouTube в России&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;&lt;em&gt;The &lt;code&gt;-2&lt;/code&gt; version have been repackaged. It is the same release as &lt;code&gt;goodbyedpi-0.2.3rc3.zip&lt;/code&gt;, the only difference is in YouTube .cmd files.&lt;/em&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.3rc2</id>
+    <updated>2024-09-14T20:49:32Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.3rc2"/>
+    <title>0.2.3rc2</title>
+    <content type="html">&lt;p&gt;Release candidate 2.&lt;/p&gt;
+&lt;p&gt;Bugfixes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/c4bbd0b8e2257971d4593a4a6478b1bcab253fdb&quot;&gt;Print human-readable WinDivert error messages&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/62f29535151ed3e45e026e17a464a26b7e9c57cf&quot;&gt;Ignore all RSTs with -p&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/a6c7169033e1ae9352c5097569b1d15e1a10770c&quot;&gt;Allow to add the whole root zones into blacklist. Fixes #564.&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;Many other small fixes and typos correction&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;New features:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/f0d42129aa3241c8e48513f08a9587039a23a55a&quot;&gt;--fake-from-hex option: load Fake Packet from HEX data&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/15793fb84f8df7995907d9312ac19571b42f8dd0&quot;&gt;--fake-gen option: generate random-filled Fake Packets&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/bc95b6f5982b3e22a8e4466163daba6914b2aba8&quot;&gt;--fake-resend option: repeat sending each fake packet number of times&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Packaging:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Added &lt;code&gt;YOUTUBE&lt;/code&gt; scripts for Russia (regular and service)&lt;/li&gt;
+&lt;li&gt;Added stopping and deleting &lt;code&gt;WinDivert14&lt;/code&gt; service in &lt;code&gt;service_remove.cmd&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;Added more domains to youtube-blacklist&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Blacklist option may inconsistently work with Kyber enabled, but should at least work fine without blacklist now. See &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2070245039&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/330/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot;&gt;#330&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/378&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/378/hovercard&quot;&gt;Обход замедления YouTube в России&lt;/a&gt;&lt;/h1&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.3rc1</id>
+    <updated>2024-08-01T06:34:17Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.3rc1"/>
+    <title>0.2.3rc1</title>
+    <content type="html">&lt;p&gt;Release candidate 1.&lt;/p&gt;
+&lt;p&gt;Bugfixes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Switch to WinDivert 2.2.0-D&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/67629fb6ef8c2a861bdc279bca8e36ab784050dd&quot;&gt;Disable auto-ttl if set-ttl has been used after auto-ttl&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/4f18a732390d7e4c72c61ac2df4a26d1f2ee6ad7&quot;&gt;Print correct set-ttl/auto-ttl mode in the status&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/4c846c712dfedffd1e28405af4240ca6932414a3&quot;&gt;Handle TLSv1.2 record version handshakes (16 03 03).&lt;/a&gt; &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2294106538&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/353&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/353/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/353&quot;&gt;#353&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/60dd3cb004b7a00eb1b4801050e9af56be0b3aa2&quot;&gt;Make ClientHello ignore --max-payload limits&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;New features:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/15eb10ac68cb0031d27ea6b998bdac9df9a229bc&quot;&gt;Fragment packet by the beginning of SNI value.&lt;/a&gt; &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2326239276&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/357&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/357/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/357&quot;&gt;#357&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/d031ae65bfec815d917f89823bcb7b265b5c8450&quot;&gt;New option: -q - block QUIC/HTTP3&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/f1aece75ae05b11c2c8ceec274a39089820c6c7c&quot;&gt;New mode: -7 (As -6 but with wrong chksum)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/f7362094d3cf2978aa94c0f4d9a99c3c46cf8d3a&quot;&gt;New modes: -8 and -9 (wrong chksum + wrong seq + block quic)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/9bfce3156eb4a9f840ee41f348cd5cd2f9816d35&quot;&gt;Make mode -9 the default, instead of -5&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Packaging:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Update .cmd scripts to use &lt;code&gt;-9&lt;/code&gt; mode&lt;/li&gt;
+&lt;li&gt;Replace domain in Russian list update script&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Blacklist option may inconsistently work with Kyber enabled, but should at least work fine without blacklist now. See &lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;2070245039&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/330/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/330&quot;&gt;#330&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/378&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/378/hovercard&quot;&gt;Обход замедления YouTube в России&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;em&gt;The &lt;code&gt;-2&lt;/code&gt; version have been repackaged. It is the same release as &lt;code&gt;goodbyedpi-0.2.3rc1.zip&lt;/code&gt;, the only difference is in Russian .cmd files (add youtube).&lt;/em&gt;&lt;/p&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.2</id>
+    <updated>2024-07-28T19:50:21Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.2"/>
+    <title>GoodbyeDPI v0.2.2</title>
+    <content type="html">&lt;p&gt;Bugfix release:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/871670845f4059827dd6845778a01e89b4832305&quot;&gt;Document forgotten &lt;code&gt;--max-payload&lt;/code&gt; in -5 and -6 modes&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/1cfd2b1b9f98e03e8dde5a0ce8c10d32308dda1f&quot;&gt;Allow setting &lt;code&gt;--max-payload&lt;/code&gt; to zero&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/246&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/246/hovercard&quot;&gt;Fix optional parameter parser in service mode&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/55a3a94065dea2fa3edb3ac73156a05bd1d47426&quot;&gt;Handle &quot;0&quot; in domain names (SNI)&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/6ee4101f582e55de1ff939029e3b9cfe6f04462b&quot;&gt;Fix --set-ttl when used with --min-ttl&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--set-ttl&lt;/code&gt; after &lt;code&gt;--auto-ttl&lt;/code&gt; does not work (does not disable auto-ttl) despite &lt;code&gt;Fake requests, TTL: fixed&lt;/code&gt; in the status line (since v0.2.0)&lt;/li&gt;
+&lt;li&gt;Not really a bug, but anyway: &lt;code&gt;--max-payload 1200&lt;/code&gt; would skip HTTP request block circumvention if the payload is large (if there&#39;s a lot of cookies for example).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;&lt;a href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/378&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/378/hovercard&quot;&gt;Обход замедления YouTube в России&lt;/a&gt;&lt;/h2&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.1</id>
+    <updated>2022-01-04T14:30:22Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.1"/>
+    <title>GoodbyeDPI v0.2.1</title>
+    <content type="html">&lt;p&gt;Quick bugfix for the domain names which contain hyphen (&lt;code&gt;-&lt;/code&gt;), which were not processed correctly in v0.2.0.&lt;/p&gt;
+&lt;br&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-5&lt;/code&gt; and &lt;code&gt;-6&lt;/code&gt; modes activate &lt;code&gt;--max-payload&lt;/code&gt;, but it&#39;s not mentioned in the help message.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.2.0</id>
+    <updated>2022-01-04T14:29:38Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.2.0"/>
+    <title>GoodbyeDPI v0.2.0</title>
+    <content type="html">&lt;p&gt;New features:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Better Auto TTL adjusting algorithm which honors short distance: auto-ttl is now a range, not a fixed decrement value (see &lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/e25d7432de087ee247f9fdfa9a7cd3d569fe68bc/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/e25d7432de087ee247f9fdfa9a7cd3d569fe68bc&quot;&gt;&lt;tt&gt;e25d743&lt;/tt&gt;&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Fake Packet TTL now has upper limit in Auto TTL mode, to fix destinations with slightly bigger TTL increased from standard values&lt;/li&gt;
+&lt;li&gt;New &lt;code&gt;--min-ttl&lt;/code&gt; option which prevents Fake TTL Packet in &lt;code&gt;--set-ttl&lt;/code&gt; mode from being sent if TTL distance is lower than the defined value&lt;/li&gt;
+&lt;li&gt;New &lt;code&gt;--allow-no-sni&lt;/code&gt; option. Useful to process the packet with &lt;code&gt;--blacklist&lt;/code&gt; option, when SNI can&#39;t be detected for any reason (more info: &lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/cc1676ad92c85011f14c5fa2c9628ba34d3412ae/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/cc1676ad92c85011f14c5fa2c9628ba34d3412ae&quot;&gt;&lt;tt&gt;cc1676a&lt;/tt&gt;&lt;/a&gt;)&lt;/li&gt;
+&lt;li&gt;Max Payload Size limit option (&lt;code&gt;--max-payload&lt;/code&gt;) to reduce large download/upload CPU consumption (more info: &lt;a class=&quot;commit-link&quot; data-hovercard-type=&quot;commit&quot; data-hovercard-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/d7c681d1a249f2ebe2fe9dc2e08a2da5f1fd8fc7/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/commit/d7c681d1a249f2ebe2fe9dc2e08a2da5f1fd8fc7&quot;&gt;&lt;tt&gt;d7c681d&lt;/tt&gt;&lt;/a&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;This release also has small bug fixes.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;-5&lt;/code&gt; and &lt;code&gt;-6&lt;/code&gt; modes now use &lt;code&gt;--max-payload=1200&lt;/code&gt; by default.&lt;/p&gt;
+&lt;br&gt;
+&lt;p&gt;Known bugs:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;When &lt;code&gt;--blacklist&lt;/code&gt; is used, domain names which contain hyphen (&lt;code&gt;-&lt;/code&gt;) are not considered as blocked even if they are in the blacklist.&lt;br&gt;
+If &lt;code&gt;--blacklist&lt;/code&gt; is used in combination with &lt;code&gt;--allow-no-sni&lt;/code&gt;, TLS circumvention techniques are applied to all domains with hyphen (even not in blacklist).&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-5&lt;/code&gt; and &lt;code&gt;-6&lt;/code&gt; modes activate &lt;code&gt;--max-payload&lt;/code&gt;, but it&#39;s not mentioned in the help message.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.1.8</id>
+    <updated>2021-12-26T20:51:18Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.1.8"/>
+    <title>GoodbyeDPI v0.1.8</title>
+    <content type="html">&lt;h4&gt;Try the new &lt;code&gt;-5&lt;/code&gt; mode, which is default now when you start the program without options. It should work on overwhelming majority of DPI systems out of the box.&lt;/h4&gt;
+&lt;p&gt;New censorship circumvention method:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Fake Packet with wrong SEQ/ACK numbers (&lt;code&gt;--wrong-seq&lt;/code&gt;)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;New features:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;--blacklist&lt;/code&gt; option now also applies to TLS (HTTPS websites)&lt;/li&gt;
+&lt;li&gt;Automatic TTL value picker for set-ttl Fake Packet mode (&lt;code&gt;--auto-ttl&lt;/code&gt;) ← very convenient&lt;/li&gt;
+&lt;li&gt;New modern mode sets (more stable, more compatible, faster): &lt;code&gt;-5&lt;/code&gt; (now default) with native reversed fragmentation and fake packet auto-ttl, and &lt;code&gt;-6&lt;/code&gt; with wrong-seq instead of auto-ttl.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Other changes:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Fake Packet mode (&lt;code&gt;--set-ttl&lt;/code&gt;, &lt;code&gt;--wrong-chksum&lt;/code&gt;, &lt;code&gt;--wrong-seq&lt;/code&gt;) now applies each method to each packet separately, and doesn&#39;t combine all methods for a single packet.&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.1.7</id>
+    <updated>2021-12-25T16:36:15Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.1.7"/>
+    <title>GoodbyeDPI v0.1.7</title>
+    <content type="html">&lt;p&gt;New feature: &lt;code&gt;--native-frag&lt;/code&gt; non-Window-Size TCP segmentation and it&#39;s companion &lt;code&gt;--reverse-frag&lt;/code&gt;, which sends segments in the reverse order to workaround TLS terminators issues with fragmented packets.&lt;br&gt;
+This is faster and more compatible than using Window Size shrinking.&lt;/p&gt;
+&lt;p&gt;Bugfix: Fix fake packet handling without other modifying parameters (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;516221657&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/150&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/150/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/150&quot;&gt;#150&lt;/a&gt;)&lt;/p&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.1.6</id>
+    <updated>2019-11-01T19:08:18Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.1.6"/>
+    <title>GoodbyeDPI v0.1.6</title>
+    <content type="html">&lt;p&gt;New feature: Fake Packet Mode, activate with &lt;code&gt;--set-ttl&lt;/code&gt; and &lt;code&gt;--wrong-chksum&lt;/code&gt; options.&lt;br&gt;
+This feature is surprisingly effective against many DPI systems.&lt;/p&gt;
+&lt;p&gt;Known bugs: fake HTTP packets are not getting sent if only Fake Packet Mode is activated, without any other HTTP options (&lt;a class=&quot;issue-link js-issue-link&quot; data-error-text=&quot;Failed to load title&quot; data-id=&quot;516221657&quot; data-permission-text=&quot;Title is private&quot; data-url=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/150&quot; data-hovercard-type=&quot;issue&quot; data-hovercard-url=&quot;/ValdikSS/GoodbyeDPI/issues/150/hovercard&quot; href=&quot;https://github.com/ValdikSS/GoodbyeDPI/issues/150&quot;&gt;#150&lt;/a&gt;)&lt;/p&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+  <entry>
+    <id>tag:github.com,2008:Repository/91493088/0.1.5</id>
+    <updated>2019-01-03T13:14:14Z</updated>
+    <link rel="alternate" type="text/html" href="https://github.com/ValdikSS/GoodbyeDPI/releases/tag/0.1.5"/>
+    <title>GoodbyeDPI v0.1.5</title>
+    <content type="html">&lt;ul&gt;
+&lt;li&gt;Change: Add version number into greeting message&lt;/li&gt;
+&lt;li&gt;Change: Use newlines for current options information&lt;/li&gt;
+&lt;/ul&gt;</content>
+    <author>
+      <name>ValdikSS</name>
+    </author>
+    <media:thumbnail height="30" width="30" url="https://avatars.githubusercontent.com/u/3054729?s=60&amp;v=4"/>
+  </entry>
+</feed>

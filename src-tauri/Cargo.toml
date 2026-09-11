@@ -1,6 +1,6 @@
 [package]
 name = "zapret-studio"
-version = "1.5.0"
+version = "1.6.0"
 description = "Zapret Studio"
 edition = "2021"
 rust-version = "1.77"

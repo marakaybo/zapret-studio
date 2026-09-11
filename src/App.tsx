@@ -43,6 +43,11 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 const CORES: Core[] = ["xray", "singbox"];
 
+/** Список резолверов не меняется за время работы, поэтому ссылка на запрос
+ *  должна быть постоянной: иначе useEffect в настройках считал бы её новой
+ *  на каждую перерисовку и дёргал бэкенд без остановки. */
+const dnsProviders = () => api.dnsProviders();
+
 function TitleBar() {
   const win = isTauri
     ? getCurrentWindow()
@@ -684,6 +689,10 @@ function Shell() {
                     onStopConflicts={() => act(() => api.stopConflicts())}
                     onWarp={(on) => act(() => (on ? api.warpConnect() : api.warpDisconnect()))}
                     onWarpCheck={() => api.warpCheck()}
+                    onDnsProviders={dnsProviders}
+                    onDnsSet={(p) => act(() => api.dnsSet(p))}
+                    onDnsRestore={() => act(() => api.dnsRestore())}
+                    onDnsCheck={() => api.dnsCheck()}
                     onInstallWarp={() => openUrl(snap.warp.installUrl)}
                     coreUpdate={coreUpdate}
                     coreChecking={coreChecking}

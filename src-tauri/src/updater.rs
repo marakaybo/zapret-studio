@@ -72,10 +72,10 @@ fn http_error(what: &str, status: u16, headers: &reqwest::header::HeaderMap) -> 
             .map(|t| t.with_timezone(&chrono::Local).format("%H:%M").to_string());
         return match when {
             Some(t) => format!(
-                "{what}: исчерпан лимит запросов к GitHub — без входа их всего 60 в час на один адрес. Лимит вернётся в {t}, до тех пор проверки обновлений подождут"
+                "{what}: исчерпан лимит запросов к GitHub. Его считают на IP-адрес, а не на человека — 60 в час на всех, кто выходит через один адрес, будь то оператор связи или VPN. Лимит вернётся в {t}"
             ),
             None => format!(
-                "{what}: исчерпан лимит запросов к GitHub — без входа их всего 60 в час на один адрес. Подожди примерно час"
+                "{what}: исчерпан лимит запросов к GitHub. Его считают на IP-адрес, а не на человека — 60 в час на всех, кто выходит через один адрес, будь то оператор связи или VPN. Подожди примерно час"
             ),
         };
     }
@@ -307,7 +307,18 @@ async fn github<T: serde::de::DeserializeOwned>(url: &str) -> Result<T, String> 
 }
 
 /// Последний стабильный релиз репозитория.
+///
+/// Сперва пробуем обычные страницы github.com, и только если они не дались —
+/// API. Порядок именно такой, потому что лимит есть только у API: 60 запросов
+/// в час **на IP-адрес**, а не на пользователя. За одним адресом сидит целая
+/// сеть — оператор, CGNAT, офис, VPN, — и человек получал «слишком много
+/// запросов», не сделав ни одного: квоту потратили чужие. Обойти это, экономя
+/// свои запросы, нельзя, поэтому в обычном случае в API мы не ходим вовсе.
+/// Подробности приёма — в `ghweb`.
 pub async fn latest_release_of(repo: &str, want: fn(&str) -> bool) -> Result<ReleaseInfo, String> {
+    if let Ok(info) = crate::ghweb::latest_release_of(repo, want).await {
+        return Ok(info);
+    }
     let url = format!("https://api.github.com/repos/{repo}/releases/latest");
     let rel: GhRelease = github(&url).await?;
     to_info(&rel, want).ok_or_else(|| "в релизе нет подходящего архива".into())
@@ -316,6 +327,9 @@ pub async fn latest_release_of(repo: &str, want: fn(&str) -> bool) -> Result<Rel
 /// Самый свежий релиз, включая предрелизы. Нужен GoodbyeDPI: стабильный там
 /// висит с 2022 года, а всё живое выходит как release candidate.
 pub async fn latest_release_any(repo: &str, want: fn(&str) -> bool) -> Result<ReleaseInfo, String> {
+    if let Ok(info) = crate::ghweb::latest_release_any(repo, want).await {
+        return Ok(info);
+    }
     let url = format!("https://api.github.com/repos/{repo}/releases?per_page=10");
     let list: Vec<GhRelease> = github(&url).await?;
     list.iter()
@@ -740,7 +754,7 @@ mod tests {
         let _ = std::fs::remove_file(&tmp);
     }
 
-    /// Маленький архив ByeDPI качается целиком и совпадает по размеру.
+    /// Маленький архив ByeDPI качается целиком.
     #[tokio::test]
     async fn downloads_byedpi_archive() {
         if std::env::var("ZAPRET_NET_TEST").is_err() {
@@ -759,25 +773,70 @@ mod tests {
         .await
         .expect("архив должен скачаться");
         let size = std::fs::metadata(&tmp).unwrap().len();
-        assert_eq!(size, release.size, "размер не совпал");
+        // Со страниц github.com размер узнать неоткуда, и он приходит нулём —
+        // настоящий берётся из `content-length` уже при загрузке. Сверяем с
+        // ожидаемым только тогда, когда его вообще сообщили
+        if release.size > 0 {
+            assert_eq!(size, release.size, "размер не совпал");
+        }
+        assert!(size > 10_000, "архив подозрительно мал: {size} байт");
         let _ = std::fs::remove_file(&tmp);
     }
 
-    /// Живая проверка обоих репозиториев тем же клиентом, что и в приложении:
-    /// ZAPRET_NET_TEST=1 cargo test --lib -- --nocapture
+    /// Сколько запросов к API у нас осталось. Сам `/rate_limit` в лимит не
+    /// входит — иначе измерять им было бы нечем.
+    #[cfg(test)]
+    async fn api_remaining() -> Option<u32> {
+        let client = reqwest::Client::builder().user_agent(UA).build().ok()?;
+        let resp = client.get("https://api.github.com/rate_limit").send().await.ok()?;
+        resp.headers().get("x-ratelimit-remaining")?.to_str().ok()?.parse().ok()
+    }
+
+    /// Живая проверка всех пяти репозиториев тем же путём, каким ходит
+    /// приложение: ZAPRET_NET_TEST=1 cargo test --lib -- --nocapture
+    ///
+    /// И главное — что она не стоит ни одного запроса к API. Ради этого всё
+    /// и затевалось: лимит считают на IP-адрес, за которым сидит целая сеть,
+    /// и человек упирался в него, ничего не нажимая. Поэтому здесь не просто
+    /// «получилось», а замер остатка до и после.
     #[tokio::test]
-    async fn reaches_both_repositories() {
+    async fn reaches_every_repository_without_spending_api_quota() {
         if std::env::var("ZAPRET_NET_TEST").is_err() {
             return;
         }
+        let zip = (|n: &str| n.to_lowercase().ends_with(".zip")) as fn(&str) -> bool;
+        let before = api_remaining().await;
+        println!("запросов к API в запасе до проверки: {before:?}");
+
+        let mut failed = Vec::new();
         for (repo, want) in [
-            ("Flowseal/zapret-discord-youtube", (|n: &str| n.to_lowercase().ends_with(".zip")) as fn(&str) -> bool),
+            ("Flowseal/zapret-discord-youtube", zip),
             ("hufrea/byedpi", crate::byedpi::is_windows_asset),
+            ("XTLS/Xray-core", crate::xray::SPEC.asset),
+            ("SagerNet/sing-box", crate::singbox::SPEC.asset),
         ] {
             match latest_release_of(repo, want).await {
-                Ok(r) => println!("{repo}: {} — {} ({} байт)", r.version, r.zip_url, r.size),
-                Err(e) => println!("{repo}: ОШИБКА — {e}"),
+                Ok(r) => println!("{repo}: {} — {}", r.version, r.zip_url),
+                Err(e) => {
+                    println!("{repo}: ОШИБКА — {e}");
+                    failed.push(repo);
+                }
             }
+        }
+        // GoodbyeDPI спрашиваем иначе: там нужен свежий предрелиз
+        match latest_release_any("ValdikSS/GoodbyeDPI", crate::goodbye::is_windows_asset).await {
+            Ok(r) => println!("ValdikSS/GoodbyeDPI: {} — {}", r.version, r.zip_url),
+            Err(e) => {
+                println!("ValdikSS/GoodbyeDPI: ОШИБКА — {e}");
+                failed.push("ValdikSS/GoodbyeDPI");
+            }
+        }
+
+        let after = api_remaining().await;
+        println!("запросов к API в запасе после проверки: {after:?}");
+        assert!(failed.is_empty(), "не нашлись релизы: {failed:?}");
+        if let (Some(a), Some(b)) = (before, after) {
+            assert_eq!(a, b, "проверка пяти релизов потратила {} запросов к API", a - b);
         }
     }
 }

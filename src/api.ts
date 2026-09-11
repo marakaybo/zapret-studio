@@ -5,6 +5,7 @@ import type {
   Check,
   ConflictItem,
   Core,
+  DnsProvider,
   Engine,
   HostsStatus,
   LogLine,
@@ -89,6 +90,10 @@ const real = {
   warpConnect: () => invoke<ActionResult>("warp_connect"),
   warpDisconnect: () => invoke<ActionResult>("warp_disconnect"),
   warpCheck: () => invoke<WarpProbe>("warp_check"),
+  dnsProviders: () => invoke<DnsProvider[]>("dns_providers"),
+  dnsSet: (provider: string) => invoke<ActionResult>("dns_set", { provider }),
+  dnsRestore: () => invoke<ActionResult>("dns_restore"),
+  dnsCheck: () => invoke<Check>("dns_check"),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
   stopConflicts: (items?: ConflictItem[]) =>
     invoke<ActionResult>("stop_conflicts", { items: items ?? null }),

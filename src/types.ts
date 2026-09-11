@@ -31,6 +31,15 @@ export interface AppConfig {
   byedpiBest: string | null;
   byedpiLastTestAt: string | null;
   savedProxy: { enabled: boolean; server: string; bypass: string } | null;
+  /** настройки DNS, которые были до нас, — для «вернуть как было» */
+  savedDns: {
+    guid: string;
+    index: number;
+    adapter: string;
+    fromDhcp: boolean;
+    v4: string[];
+    v6: string[];
+  } | null;
   goodbyeDir: string | null;
   goodbyeManaged: boolean;
   goodbyeVersion: string | null;
@@ -113,6 +122,38 @@ export interface ByeState extends PresetEngine {
   systemProxy: boolean;
   /** системный прокси прямо сейчас направлен в ByeDPI */
   systemProxyActive: boolean;
+}
+
+/** Где спрашивают адреса сайтов. Подмена DNS бьёт раньше DPI: браузер уходит
+ *  не туда ещё до всякого обхода, и обход тут бессилен. */
+export interface DnsState {
+  /** адаптер, которым Windows реально пойдёт наружу */
+  adapter: string;
+  index: number;
+  guid: string;
+  servers: string[];
+  /** адреса выданы роутером, а не прописаны руками */
+  fromDhcp: boolean;
+  /** шифрование включено для всех текущих адресов */
+  encrypted: boolean;
+  /** узнанный резолвер: Cloudflare, Google, Quad9 */
+  provider: string | null;
+  /** имена разрешает чужая программа — трогать настройки нельзя */
+  owner: string | null;
+  /** наружу ведёт виртуальный адаптер: поднят туннель */
+  tunnel: boolean;
+  error: string | null;
+  /** почему трогать настройки нельзя; null — можно */
+  blocked: string | null;
+}
+
+/** Резолвер, для которого у Windows есть свой шаблон DoH. Список приходит
+ *  с бэкенда: адреса обязаны совпадать с теми, что Windows знает сама. */
+export interface DnsProvider {
+  id: string;
+  name: string;
+  servers: string[];
+  note: string;
 }
 
 /** Cloudflare WARP: не обход, но уводит в туннель весь трафик, включая проверки */
@@ -217,6 +258,7 @@ export interface Snapshot {
   xray: CoreState;
   singbox: CoreState;
   warp: WarpState;
+  dns: DnsState;
   /** свои сайты, которые уйдут в проверку: настройки плюс targets.txt */
   checkTargets: string[];
   /** откуда приложение берёт обновления себе */

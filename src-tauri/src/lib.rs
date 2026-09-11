@@ -1,6 +1,8 @@
 mod byedpi;
 mod config;
 mod diag;
+mod dns;
+mod ghweb;
 mod goodbye;
 mod link;
 mod preset;
@@ -267,6 +269,7 @@ pub struct Snapshot {
     xray: CoreState,
     singbox: CoreState,
     warp: warp::WarpState,
+    dns: dns::DnsState,
     /// Свои сайты, которые уйдут в проверку: настройки плюс targets.txt
     check_targets: Vec<String>,
     /// Откуда приложение берёт обновления себе
@@ -349,6 +352,7 @@ fn build_snapshot(state: &AppState) -> Snapshot {
         xray: xr,
         singbox: sb,
         warp: warp::status(),
+        dns: dns::state(),
         config: cfg,
         error,
     }
@@ -2108,6 +2112,83 @@ fn warp_disconnect(state: State<'_, AppState>) -> Result<ActionResult, String> {
     Ok(ActionResult { snapshot: build_snapshot(&state), messages: vec![message] })
 }
 
+/// Из чего выбирать. Список закрытый и лежит на стороне Rust: адреса должны
+/// совпадать с теми, для которых у Windows есть свой шаблон DoH, — иначе
+/// шифрование молча не включится, а интерфейс отрапортует об успехе.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderInfo {
+    id: String,
+    name: String,
+    servers: Vec<String>,
+    note: String,
+}
+
+#[tauri::command(async)]
+fn dns_providers() -> Vec<ProviderInfo> {
+    dns::PROVIDERS
+        .iter()
+        .map(|p| ProviderInfo {
+            id: p.id.into(),
+            name: p.name.into(),
+            servers: p.v4.iter().map(|s| s.to_string()).collect(),
+            note: p.note.into(),
+        })
+        .collect()
+}
+
+/// Прописывает выбранный резолвер и включает шифрование.
+#[tauri::command(async)]
+fn dns_set(app: AppHandle, provider: String, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let p = dns::provider(&provider).ok_or_else(|| format!("Неизвестный резолвер: {provider}"))?;
+    dns::forget();
+    let before = dns::state();
+    // Отказ спрашиваем и здесь, а не только у кнопки: команда может прийти
+    // мимо интерфейса, а цена ошибки — сеть машины
+    if let Some(no) = dns::refusal(&before) {
+        return Err(no);
+    }
+    // Если наш адрес уже стоит (второе нажатие, смена резолвера), прежним
+    // остаётся то, что мы записали в первый раз, — иначе настройки человека
+    // потеряются навсегда, и вернуть их будет неоткуда
+    if state.config().saved_dns.is_none() {
+        let was = dns::snapshot(&before);
+        state.update_config(|cfg| cfg.saved_dns = Some(was))?;
+    }
+    dns::enable(p, &before)?;
+    let message =
+        format!("DNS переключён на {} с шифрованием · адаптер «{}»", p.name, before.adapter);
+    state.runner.log(Some(&app), "info", message.clone());
+    Ok(ActionResult { snapshot: build_snapshot(&state), messages: vec![message] })
+}
+
+/// Возвращает DNS к тому, что было до нас.
+#[tauri::command(async)]
+fn dns_restore(app: AppHandle, state: State<'_, AppState>) -> Result<ActionResult, String> {
+    let saved = state
+        .config()
+        .saved_dns
+        .clone()
+        .ok_or("Приложение не меняло настройки DNS — возвращать нечего")?;
+    dns::restore(&saved)?;
+    state.update_config(|cfg| cfg.saved_dns = None)?;
+    let message = if saved.from_dhcp {
+        format!("DNS возвращён роутеру · адаптер «{}»", saved.adapter)
+    } else {
+        format!("DNS возвращён к прежним адресам: {}", saved.v4.join(", "))
+    };
+    state.runner.log(Some(&app), "info", message.clone());
+    Ok(ActionResult { snapshot: build_snapshot(&state), messages: vec![message] })
+}
+
+/// Честно ли резолвер отвечает прямо сейчас. После переключения это
+/// единственный способ узнать, помогло ли: настройка записана — ещё не
+/// значит, что подмены больше нет.
+#[tauri::command(async)]
+fn dns_check() -> diag::Check {
+    diag::dns_substitution()
+}
+
 /// Спрашивает у Cloudflare, идёт ли трафик через туннель на самом деле.
 /// `warp-cli status` знает лишь то, что думает о себе служба: она может
 /// считать себя подключённой, пока туннель молчит, — и наоборот.
@@ -2878,6 +2959,10 @@ pub fn run() {
             clear_logs,
             diagnostics,
             stop_stray,
+            dns_providers,
+            dns_set,
+            dns_restore,
+            dns_check,
             warp_connect,
             warp_disconnect,
             warp_check,

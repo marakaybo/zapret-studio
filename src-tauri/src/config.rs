@@ -46,6 +46,11 @@ pub struct AppConfig {
     /// Настройки прокси, которые были у пользователя до нас, — чтобы вернуть
     /// их даже после аварийного завершения приложения
     pub saved_proxy: Option<crate::sysproxy::ProxyState>,
+    /// Настройки DNS, которые были у пользователя до нас. В отличие от
+    /// прокси, при выходе они не возвращаются: прокси в никуда оставляет
+    /// человека без интернета, а выбранный резолвер работает сам по себе
+    /// и держится до тех пор, пока его не выключат.
+    pub saved_dns: Option<crate::dns::SavedDns>,
 
     // --- GoodbyeDPI: третий движок, тоже на драйвере WinDivert ---
     pub goodbye_dir: Option<PathBuf>,
@@ -172,6 +177,7 @@ impl Default for AppConfig {
             byedpi_best: None,
             byedpi_last_test_at: None,
             saved_proxy: None,
+            saved_dns: None,
             goodbye_dir: None,
             goodbye_managed: false,
             goodbye_version: None,
