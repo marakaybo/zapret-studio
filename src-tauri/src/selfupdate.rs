@@ -110,6 +110,28 @@ mod tests {
         assert!(!is_installer("zapret-studio.exe"));
     }
 
+    /// Приложение обязано находить собственный свежий релиз тем же путём,
+    /// каким ищет его у людей. Это не формальность: самообновление — тот
+    /// механизм, которым исправления доезжают до поставивших старую версию.
+    /// Сломается оно — и чинить его будет уже нечем.
+    ///
+    /// Заодно ловится мелочь, на которой легко обжечься: GitHub заменяет
+    /// в именах файлов пробелы точками, и «Zapret Studio_…setup.exe» лежит
+    /// в релизе как «Zapret.Studio_…setup.exe».
+    #[tokio::test]
+    async fn finds_its_own_latest_release() {
+        if std::env::var("ZAPRET_NET_TEST").is_err() {
+            return;
+        }
+        let rel = latest("marakaybo/zapret-studio").await.expect("свой релиз");
+        println!("нашёлся {} — {}", rel.version, rel.zip_url);
+        let name = rel.zip_url.rsplit('/').next().unwrap();
+        assert!(is_installer(name), "это должен быть установщик, а не {name}");
+        let digest = rel.digest.expect("рядом обязана лежать контрольная сумма");
+        println!("сумма: {}", digest.name);
+        assert!(digest.name.to_lowercase().ends_with(".sha256"));
+    }
+
     /// Версия приложения должна быть настоящей: по ней решается, обновляться
     /// ли, и «0.0.0» тихо превратило бы каждый запуск в предложение обновиться.
     #[test]
